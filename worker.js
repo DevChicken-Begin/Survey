@@ -39,6 +39,7 @@ export default {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${DB_URL}`,
+          'Neon-Connection-String': DB_URL,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ query: sql, params })
@@ -157,6 +158,18 @@ export default {
           return new Response(JSON.stringify({ error: 'Survey not found' }), { status: 404, headers: corsHeaders });
         }
         return new Response(JSON.stringify(rows[0]), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // 7. Xóa khảo sát: DELETE /api/surveys?id=...
+      if (path === '/api/surveys' && request.method === 'DELETE') {
+        const id = url.searchParams.get('id');
+        if (!id) {
+          return new Response(JSON.stringify({ error: 'Survey ID required' }), { status: 400, headers: corsHeaders });
+        }
+        await queryNeon(`DELETE FROM surveys WHERE id = $1;`, [id]);
+        return new Response(JSON.stringify({ success: true, message: 'Survey deleted', id }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
