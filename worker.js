@@ -1,12 +1,52 @@
 /**
  * Cloudflare Worker Backend for Leggett & Platt Survey Platform
- * Kết nối Serverless PostgreSQL trên Neon (neon.tech) qua @neondatabase/serverless driver
+ * Kết nối Serverless PostgreSQL trên Neon (neon.tech) qua native HTTP API (Zero dependencies)
  */
-import { neon } from '@neondatabase/serverless';
 
 let tablesInitialized = false;
 
-async function ensureTables(sql) {
+function getNeonHost(dbUrl) {
+  try {
+    const u = new URL(dbUrl);
+    return u.hostname;
+  } catch (e) {
+    const m = (dbUrl || '').match(/@([^/:]+)/);
+    return m ? m[1] : '';
+  }
+}
+
+async function queryNeon(dbUrl, sql, params = []) {
+  const host = getNeonHost(dbUrl);
+  if (!host) throw new Error('DATABASE_URL không hợp lệ, không thể trích xuất host Neon');
+
+  const endpoint = `https://${host}/sql`;
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Neon-Connection-String': dbUrl,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ query: sql, params })
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    let errMsg = errText;
+    try {
+      const errJson = JSON.parse(errText);
+      if (errJson.message) errMsg = errJson.message;
+    } catch (e) {}
+    throw new Error(`Neon DB Error (${response.status}): ${errMsg}`);
+  }
+
+  const data = await response.json();
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.rows)) return data.rows;
+  return data;
+}
+
+async function ensureTables(dbUrl) {
   if (tablesInitialized) return;
   const statements = [
     `CREATE TABLE IF NOT EXISTS surveys (
@@ -29,9 +69,10 @@ async function ensureTables(sql) {
     `CREATE INDEX IF NOT EXISTS idx_resp_survey ON responses(survey_id);`,
     `CREATE INDEX IF NOT EXISTS idx_resp_msnv ON responses(employee_msnv);`
   ];
+
   for (const stmt of statements) {
     try {
-      await sql.query(stmt);
+      await queryNeon(dbUrl, stmt);
     } catch (e) {
       console.warn('Table init warning:', e.message);
     }
@@ -41,14 +82,12 @@ async function ensureTables(sql) {
 
 export default {
   async fetch(request, env, ctx) {
-    // 1. Cấu hình CORS cho phép Single-page App index.html gọi API
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, x-admin-key',
     };
 
-    // Xử lý pre-flight request từ trình duyệt
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders });
     }
@@ -56,22 +95,11 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    // Lấy Connection String Neon từ biến môi trường Cloudflare Worker
     const DB_URL = env.DATABASE_URL;
 
     if (!DB_URL) {
       return new Response(
         JSON.stringify({ error: 'Chưa cấu hình biến DATABASE_URL trong Cloudflare Worker!' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    let sql;
-    try {
-      sql = neon(DB_URL);
-    } catch (err) {
-      return new Response(
-        JSON.stringify({ error: 'Định dạng DATABASE_URL không hợp lệ: ' + err.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -82,7 +110,7 @@ export default {
         let dbOk = false;
         let dbError = null;
         try {
-          await sql.query('SELECT 1 as ok');
+          await queryNeon(DB_URL, 'SELECT 1 as ok');
           dbOk = true;
         } catch (e) {
           dbError = e.message;
@@ -99,7 +127,7 @@ export default {
       }
 
       // Đảm bảo các bảng surveys và responses đã được tạo trong Neon
-      await ensureTables(sql);
+      await ensureTables(DB_URL);
 
       // 2. Nộp bài khảo sát từ người làm (Submit Response)
       if (path === '/api/responses' && request.method === 'POST') {
@@ -114,7 +142,8 @@ export default {
         } = body;
 
         const answersStr = typeof answers === 'string' ? answers : JSON.stringify(answers || []);
-        const result = await sql.query(
+        const result = await queryNeon(
+          DB_URL,
           `INSERT INTO responses (survey_id, employee_msnv, employee_name, employee_dept, answers, submitted_at)
            VALUES ($1, $2, $3, $4, $5::jsonb, $6)
            RETURNING id;`,
@@ -128,7 +157,7 @@ export default {
           ]
         );
 
-        const insertedId = (result && result.length > 0) ? result[0].id : result;
+        const insertedId = (Array.isArray(result) && result.length > 0) ? (result[0].id || result[0]) : result;
 
         return new Response(JSON.stringify({ success: true, id: insertedId }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -140,19 +169,23 @@ export default {
         const surveyId = url.searchParams.get('survey_id');
         let rows;
         if (surveyId) {
-          rows = await sql.query(
+          rows = await queryNeon(
+            DB_URL,
             `SELECT id, survey_id, employee_msnv, employee_name, employee_dept, answers, submitted_at
              FROM responses WHERE survey_id = $1 ORDER BY submitted_at DESC LIMIT 10000;`,
             [surveyId]
           );
         } else {
-          rows = await sql.query(
+          rows = await queryNeon(
+            DB_URL,
             `SELECT id, survey_id, employee_msnv, employee_name, employee_dept, answers, submitted_at
              FROM responses ORDER BY submitted_at DESC LIMIT 10000;`
           );
         }
 
-        const normalizedRows = (rows || []).map(r => {
+        const rowsList = Array.isArray(rows) ? rows : (rows && rows.rows ? rows.rows : []);
+
+        const normalizedRows = rowsList.map(r => {
           let parsedAnswers = r.answers;
           if (typeof parsedAnswers === 'string') {
             try { parsedAnswers = JSON.parse(parsedAnswers); } catch (e) { parsedAnswers = []; }
@@ -172,9 +205,9 @@ export default {
       if (path === '/api/responses' && request.method === 'DELETE') {
         const surveyId = url.searchParams.get('survey_id');
         if (surveyId) {
-          await sql.query(`DELETE FROM responses WHERE survey_id = $1;`, [surveyId]);
+          await queryNeon(DB_URL, `DELETE FROM responses WHERE survey_id = $1;`, [surveyId]);
         } else {
-          await sql.query(`TRUNCATE TABLE responses;`);
+          await queryNeon(DB_URL, `TRUNCATE TABLE responses;`);
         }
 
         return new Response(JSON.stringify({ success: true, message: 'All response data purged successfully.' }), {
@@ -195,7 +228,8 @@ export default {
 
         const questionsStr = typeof questions === 'string' ? questions : JSON.stringify(questions || []);
 
-        await sql.query(
+        await queryNeon(
+          DB_URL,
           `INSERT INTO surveys (id, title, description, questions, updated_at)
            VALUES ($1, $2, $3, $4::jsonb, NOW())
            ON CONFLICT (id) DO UPDATE SET
@@ -217,11 +251,13 @@ export default {
         if (!id) {
           return new Response(JSON.stringify({ error: 'Survey ID required' }), { status: 400, headers: corsHeaders });
         }
-        const rows = await sql.query(`SELECT * FROM surveys WHERE id = $1 LIMIT 1;`, [id]);
-        if (!rows || rows.length === 0) {
+        const rows = await queryNeon(DB_URL, `SELECT * FROM surveys WHERE id = $1 LIMIT 1;`, [id]);
+        const rowsList = Array.isArray(rows) ? rows : (rows && rows.rows ? rows.rows : []);
+
+        if (rowsList.length === 0) {
           return new Response(JSON.stringify({ error: 'Survey not found' }), { status: 404, headers: corsHeaders });
         }
-        const s = { ...rows[0] };
+        const s = { ...rowsList[0] };
         if (typeof s.questions === 'string') {
           try { s.questions = JSON.parse(s.questions); } catch (e) {}
         }
@@ -236,7 +272,7 @@ export default {
         if (!id) {
           return new Response(JSON.stringify({ error: 'Survey ID required' }), { status: 400, headers: corsHeaders });
         }
-        await sql.query(`DELETE FROM surveys WHERE id = $1;`, [id]);
+        await queryNeon(DB_URL, `DELETE FROM surveys WHERE id = $1;`, [id]);
         return new Response(JSON.stringify({ success: true, message: 'Survey deleted', id }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });

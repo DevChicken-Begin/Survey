@@ -1,4 +1,17 @@
-import { neon } from '@neondatabase/serverless';
+/**
+ * Cloudflare Pages Functions - Health Check Endpoint
+ * Zero-dependency native fetch implementation
+ */
+
+function getNeonHost(dbUrl) {
+  try {
+    const u = new URL(dbUrl);
+    return u.hostname;
+  } catch (e) {
+    const m = (dbUrl || '').match(/@([^/:]+)/);
+    return m ? m[1] : '';
+  }
+}
 
 export async function onRequestGet(context) {
   const corsHeaders = {
@@ -13,8 +26,23 @@ export async function onRequestGet(context) {
 
   if (DB_URL) {
     try {
-      const sql = neon(DB_URL);
-      await sql.query('SELECT 1 as ok');
+      const host = getNeonHost(DB_URL);
+      if (!host) throw new Error('DATABASE_URL không hợp lệ, không trích xuất được host Neon');
+
+      const endpoint = `https://${host}/sql`;
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Neon-Connection-String': DB_URL,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query: 'SELECT 1 as ok', params: [] })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Neon HTTP ${response.status}: ${errText}`);
+      }
       dbOk = true;
     } catch (err) {
       dbError = err.message;

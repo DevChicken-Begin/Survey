@@ -1,13 +1,6 @@
-# Cloudflare Pages Functions config - dùng cho `npx wrangler pages dev`
-# Khi deploy lên Cloudflare Pages production, DATABASE_URL được cấu hình trong
-# Cloudflare Dashboard > Pages > Settings > Variables and Secrets (không cần file này)
-# File này chỉ phục vụ test localhost
-
 name = "leggett-survey"
 compatibility_date = "2024-01-01"
-
-# Pages Functions sẽ tự động map thư mục functions/ thành API routes /api/*
+pages_build_output_dir = "."
 
 [vars]
-# Để trống - sẽ load từ .dev.vars khi chạy local
-# DATABASE_URL sẽ được inject từ Variables and Secrets trên Cloudflare Pages khi deploy
+# DATABASE_URL duoc inject tu Variables and Secrets tren Cloudflare Pages khi deploy
