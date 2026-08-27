@@ -1562,7 +1562,11 @@ const ExcelExporter = {
       var dept = (r.employee_dept || r.employee?.department || "").toString();
       
       var ansMap = {};
-      (r.answers || []).forEach(function(a) {
+      var answersList = r.answers;
+      if (typeof answersList === "string") {
+        try { answersList = JSON.parse(answersList); } catch(e){ answersList = []; }
+      }
+      (answersList || []).forEach(function(a) {
         var qid = a.questionId !== undefined ? a.questionId : a.id;
         var val = a.value;
         if (Array.isArray(val)) val = val.join("; ");
@@ -1725,17 +1729,15 @@ function formatWorkerUrl(url) {
 }
 
 function getBackendSettings() {
-  // Ưu tiên CONFIG.WORKER_API_URL, nếu CONFIG = "" (rỗng) => dùng same-origin (pages.dev) => không chặn bởi LAN
-  var hasConfig = (typeof CONFIG !== "undefined" && typeof CONFIG.WORKER_API_URL === "string");
-  var rawUrl = hasConfig ? CONFIG.WORKER_API_URL.trim() : "";
-  // Nếu CONFIG cố ý để "" => same-origin, không fallback localStorage
-  // Chỉ fallback localStorage khi CONFIG không tồn tại hoặc undefined
-  if (!hasConfig || (hasConfig && rawUrl === "" && CONFIG.WORKER_API_URL !== "")) {
+  var rawUrl = "";
+  if (typeof CONFIG !== "undefined" && typeof CONFIG.WORKER_API_URL === "string" && CONFIG.WORKER_API_URL.trim() !== "") {
+    rawUrl = CONFIG.WORKER_API_URL.trim();
+  } else {
     var stored = localStorage.getItem("survey_worker_url") || "";
-    if (stored) rawUrl = stored;
+    if (stored.trim() !== "") {
+      rawUrl = stored.trim();
+    }
   }
-  // Nếu vẫn rỗng => same-origin (Cloudflare Pages Functions tại /api/*)
-  // Khi chạy trên pages.dev hoặc localhost, fetch("/api/...") sẽ tự động tới Functions
   var key = (typeof CONFIG !== "undefined" && CONFIG.ADMIN_KEY) ? CONFIG.ADMIN_KEY.trim() : (localStorage.getItem("survey_admin_key") || "");
   return {
     workerUrl: formatWorkerUrl(rawUrl), // "" => same-origin
@@ -2007,7 +2009,8 @@ async function saveSurveyAndPublish() {
       neonSynced = true;
       console.log("Neon sync OK for survey", AppState.currentSurvey.id);
     } else {
-      syncErrorMsg = await syncRes.text().catch(function(){ return "HTTP " + syncRes.status; });
+      var errData = await syncRes.json().catch(function(){ return null; });
+      syncErrorMsg = (errData && errData.error) ? errData.error : (await syncRes.text().catch(function(){ return "HTTP " + syncRes.status; }));
       console.warn("Neon sync failed:", syncRes.status, syncErrorMsg);
     }
   } catch(e){
@@ -2025,9 +2028,9 @@ async function saveSurveyAndPublish() {
   var shareUrlShort = baseUrl + "#id=" + encodeURIComponent(AppState.currentSurvey.id);
   var shareUrlFull = baseUrl + "#survey=" + base64Payload;
   
-  // Nếu Neon sync thành công => dùng short link cho QR (gọn, dễ quét trên PC)
-  // Nếu sync thất bại (chưa cấu hình DATABASE_URL hoặc offline) => dùng full link và cảnh báo
-  var shareUrl = neonSynced ? shareUrlShort : shareUrlFull;
+  // Luôn dùng link ngắn #id cho QR và link chính (gọn <50 ký tự, quét được trên PC)
+  // Link dài #survey chỉ dùng làm dự phòng offline (copy thủ công)
+  var shareUrl = shareUrlShort;
 
   // Lưu cả 2 vào dataset để copyShareUrl có thể chọn
   var linkEl = document.getElementById("surveyShareLink");
@@ -2037,18 +2040,14 @@ async function saveSurveyAndPublish() {
   linkEl.setAttribute("data-url-short", shareUrlShort);
   linkEl.title = "Link ngắn (QR gọn, cần server). Click 'Sao chép' để copy. Full link offline lưu tại data-url-full";
 
+  // QR luôn dùng link ngắn #id (gọn, <50 ký tự, quét được trên màn hình PC)
+  // Dù Neon chưa sync, vẫn tạo QR ngắn để test quét được; participant sẽ thấy lỗi "không tìm thấy" nếu chưa sync, nhưng QR vẫn quét được
   var canvas = document.getElementById("qrCanvas");
   try {
-    QRCodeEngine.drawToCanvas(canvas, shareUrl, 300);
+    QRCodeEngine.drawToCanvas(canvas, shareUrlShort, 300);
   } catch(e) {
-    console.error("QR generation failed for short URL, trying full:", e);
-    try {
-      QRCodeEngine.drawToCanvas(canvas, shareUrlFull, 300);
-      showToast("QR link dài, đã tạo QR dự phòng (cần server).", "info");
-    } catch(e2) {
-      console.error("QR generation failed completely:", e2);
-      showToast("Tạo QR thất bại: dữ liệu quá dài. Vui lòng dùng link ngắn.", "error");
-    }
+    console.error("QR generation failed for short URL:", e);
+    showToast("Tạo QR thất bại: " + e.message + " (link: " + escHtml(shareUrlShort).slice(0,80) + ")", "error");
   }
 
   // Hiển thị thêm link full bên dưới để user copy khi cần offline (nếu QR short cần server)
@@ -2067,10 +2066,12 @@ async function saveSurveyAndPublish() {
   if (neonSynced) {
     showToast("✓ Đã lưu & đồng bộ Neon thành công! QR ngắn quét được trên màn hình PC.", "success");
     document.getElementById("statBackendStatus") && (document.getElementById("statBackendStatus").innerHTML = '<span class="badge badge-green">✓ Neon Synced (pages.dev)</span>');
+    linkEl.style.borderColor = "";
+    linkEl.style.background = "";
   } else {
-    showToast("⚠️ Đã lưu cục bộ, chưa đồng bộ Neon: " + escHtml(syncErrorMsg).slice(0,120) + " - QR đang dùng link offline dài, khó quét. Kiểm tra Variables DATABASE_URL trên Cloudflare Pages.", "error");
-    // Cập nhật gợi ý cho user: link hiện tại là full nên QR sẽ dày, khuyến nghị cấu hình Neon
+    showToast("⚠️ Đã lưu cục bộ, chưa đồng bộ Neon: " + escHtml(syncErrorMsg).slice(0,150) + " - QR ngắn đã tạo nhưng người tham gia sẽ KHÔNG vào được cho đến khi đồng bộ Neon thành công. Kiểm tra Cloudflare Pages > Settings > Variables DATABASE_URL và Redeploy.", "error");
     linkEl.style.borderColor = "#fca5a5";
+    linkEl.style.background = "#fff1f2";
   }
 }
 
@@ -2367,7 +2368,8 @@ async function submitSurveyResponse() {
     if (res.ok) {
       neonSynced = true;
     } else {
-      neonErr = await res.text().catch(function(){ return "HTTP " + res.status; });
+      var errData = await res.json().catch(function(){ return null; });
+      neonErr = (errData && errData.error) ? errData.error : (await res.text().catch(function(){ return "HTTP " + res.status; }));
       console.warn("Neon sync failed:", neonErr);
     }
   } catch(err) {
@@ -2423,6 +2425,15 @@ async function refreshDataList() {
     var res = await fetch(apiUrl);
     if (res.ok) {
       rows = await res.json();
+      if (Array.isArray(rows)) {
+        rows.forEach(function(r) {
+          if (typeof r.answers === "string") {
+            try { r.answers = JSON.parse(r.answers); } catch(e) { r.answers = []; }
+          }
+        });
+      } else {
+        rows = [];
+      }
       document.getElementById("statBackendStatus").innerHTML = '<span class="badge badge-green">✓ Neon PostgreSQL (Online - pages.dev)</span>';
     } else {
       throw new Error("HTTP " + res.status);
@@ -2430,6 +2441,11 @@ async function refreshDataList() {
   } catch(err) {
     console.warn("Fetch Neon via pages.dev failed, fallback IndexedDB:", err);
     rows = await DB.getAllResponses();
+    (rows || []).forEach(function(r) {
+      if (typeof r.answers === "string") {
+        try { r.answers = JSON.parse(r.answers); } catch(e) { r.answers = []; }
+      }
+    });
     // Kiểm tra xem có phải đang chạy same-origin nhưng API chưa sẵn sàng
     var backend = getBackendSettings();
     if (backend.workerUrl) {
@@ -2488,8 +2504,12 @@ function renderResponsesTable(rows) {
       try { time = new Date(time).toLocaleString('vi-VN'); } catch(e){}
     }
 
-    var answersCount = (r.answers || []).length;
-    var previewAns = (r.answers || []).slice(0, 2).map(function(a) {
+    var answersList = r.answers;
+    if (typeof answersList === "string") {
+      try { answersList = JSON.parse(answersList); } catch(e){ answersList = []; }
+    }
+    var answersCount = (answersList || []).length;
+    var previewAns = (answersList || []).slice(0, 2).map(function(a) {
       var v = Array.isArray(a.value) ? a.value.join(', ') : a.value;
       return '<b>' + escHtml(a.question) + ':</b> ' + escHtml(v);
     }).join('<br>');
@@ -2548,9 +2568,14 @@ function viewResponseDetail(index) {
   html += '<div>🕒 <b>Thời Gian Nộp:</b> ' + escHtml(time) + '</div>';
   html += '</div>';
 
+  var answersList = record.answers;
+  if (typeof answersList === "string") {
+    try { answersList = JSON.parse(answersList); } catch(e){ answersList = []; }
+  }
+
   html += '<h4 style="font-size:14px;font-weight:700;margin-bottom:12px;">Chi Tiết Câu Trả Lời:</h4>';
   html += '<div style="display:flex;flex-direction:column;gap:12px;">';
-  (record.answers || []).forEach(function(a, idx) {
+  (answersList || []).forEach(function(a, idx) {
     var val = Array.isArray(a.value) ? a.value.join(', ') : a.value;
     html += '<div style="border-left:3px solid var(--primary);padding-left:12px;">';
     html += '  <div style="font-weight:600;font-size:13px;color:#1f2937;">' + (idx + 1) + '. ' + escHtml(a.question) + '</div>';
@@ -2576,6 +2601,13 @@ async function exportDataToExcel() {
     alert("Chưa có dữ liệu phản hồi nào để xuất Excel.");
     return;
   }
+
+  // Normalize answers
+  rows.forEach(function(r) {
+    if (typeof r.answers === "string") {
+      try { r.answers = JSON.parse(r.answers); } catch(e){ r.answers = []; }
+    }
+  });
 
   var questions = AppState.currentSurvey.questions;
   if (!questions || questions.length === 0) {
