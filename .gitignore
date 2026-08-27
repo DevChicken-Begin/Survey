@@ -1,0 +1,11 @@
+# Cloudflare
+.dev.vars
+.wrangler/
+.dev.vars.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/

@@ -1,0 +1,15 @@
+{
+  "name": "leggett-survey-pages",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Leggett & Platt Survey Platform - Cloudflare Pages + Neon",
+  "scripts": {
+    "dev": "wrangler pages dev . --port 8788 --compatibility-date=2024-01-01",
+    "dev:host": "wrangler pages dev . --port 8788 --host 0.0.0.0 --compatibility-date=2024-01-01",
+    "deploy": "wrangler pages deploy . --project-name=leggett-survey",
+    "preview": "wrangler pages dev . --port 8788"
+  },
+  "devDependencies": {
+    "wrangler": "^4.126.0"
+  }
+}
