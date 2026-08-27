@@ -7,7 +7,19 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+<script>
+  // Chặn 100% hiện tượng chớp/nháy menu Admin khi người tham gia mở Link tự sinh (#id hoặc #survey)
+  (function() {
+    var h = window.location.hash;
+    if (h && (h.indexOf('id=') !== -1 || h.indexOf('survey=') !== -1)) {
+      document.documentElement.classList.add('participant-mode-lock');
+    }
+  })();
+</script>
 <style>
+html.participant-mode-lock #adminView {
+  display: none !important;
+}
 
 :root {
   --primary: #7a45ff;
@@ -1104,7 +1116,7 @@ textarea.form-control {
     </div>
     <div class="modal-body">
       <p style="font-size:14px;color:#374151;margin-bottom:14px;line-height:1.6;">
-        Hành động này sẽ <b>XÓA VĨNH VIỄN</b> toàn bộ dữ liệu phản hồi khảo sát trên <b>Neon Database</b> và <b>bộ nhớ trình duyệt</b> để đưa hệ thống về trạng thái mặc định, giúp giải phóng dung lượng Neon.
+        Hành động này sẽ <b>XÓA VĨNH VIỄN</b> toàn bộ dữ liệu phản hồi khảo sát.
       </p>
       <div style="background:#fee2e2;border:1px solid #fca5a5;padding:12px;border-radius:8px;font-size:13px;color:#991b1b;margin-bottom:16px;">
         ⚠️ <b>Khuyến cáo:</b> Hãy đảm bảo bạn đã bấm <b>"XUẤT FILE EXCEL"</b> để lưu trữ dữ liệu trước khi xóa.
@@ -1163,6 +1175,7 @@ const QRCodeEngine = (function() {
   function QR8bitByte(data) {
     this.mode = 4;
     this.data = data;
+    this.parsedData = stringToBytes(data);
   }
   QR8bitByte.prototype = {
     getLength: function() { return this.parsedData.length; },
@@ -1256,6 +1269,7 @@ const QRCodeEngine = (function() {
     ],
     getRSBlocks: function(typeNumber, errorCorrectLevel) {
       var rsBlock = QRRSBlock.getRsBlockTable(typeNumber, errorCorrectLevel);
+      if (!rsBlock) throw new Error("bad rs block @ typeNumber:" + typeNumber + "/errorCorrectLevel:" + errorCorrectLevel);
       var length = rsBlock.length / 3;
       var list = [];
       for (var i = 0; i < length; i++) {
@@ -1272,7 +1286,120 @@ const QRCodeEngine = (function() {
         case 0: return QRRSBlock.RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 1];
         case 3: return QRRSBlock.RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 2];
         case 2: return QRRSBlock.RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 3];
+        default: return undefined;
       }
+    }
+  };
+
+  var QRUtil = {
+    PATTERN_POSITION_TABLE: [
+      [],
+      [6, 18],
+      [6, 22],
+      [6, 26],
+      [6, 30],
+      [6, 34],
+      [6, 22, 38],
+      [6, 24, 42],
+      [6, 26, 46],
+      [6, 28, 50]
+    ],
+    G15: (1 << 10) | (1 << 8) | (1 << 5) | (1 << 4) | (1 << 2) | (1 << 1) | (1 << 0),
+    G18: (1 << 12) | (1 << 11) | (1 << 10) | (1 << 9) | (1 << 8) | (1 << 5) | (1 << 2) | (1 << 0),
+    G15_MASK: (1 << 14) | (1 << 12) | (1 << 10) | (1 << 4) | (1 << 1),
+    getBCHTypeInfo: function(data) {
+      var d = data << 10;
+      while (QRUtil.getBCHDigit(d) - QRUtil.getBCHDigit(QRUtil.G15) >= 0) {
+        d ^= (QRUtil.G15 << (QRUtil.getBCHDigit(d) - QRUtil.getBCHDigit(QRUtil.G15)));
+      }
+      return ((data << 10) | d) ^ QRUtil.G15_MASK;
+    },
+    getBCHTypeNumber: function(data) {
+      var d = data << 12;
+      while (QRUtil.getBCHDigit(d) - QRUtil.getBCHDigit(QRUtil.G18) >= 0) {
+        d ^= (QRUtil.G18 << (QRUtil.getBCHDigit(d) - QRUtil.getBCHDigit(QRUtil.G18)));
+      }
+      return (data << 12) | d;
+    },
+    getBCHDigit: function(data) {
+      var digit = 0;
+      while (data != 0) { digit++; data >>>= 1; }
+      return digit;
+    },
+    getPatternPosition: function(typeNumber) {
+      return QRUtil.PATTERN_POSITION_TABLE[typeNumber - 1] || [];
+    },
+    getMask: function(maskPattern, i, j) {
+      switch (maskPattern) {
+        case 0: return (i + j) % 2 == 0;
+        case 1: return i % 2 == 0;
+        case 2: return j % 3 == 0;
+        case 3: return (i + j) % 3 == 0;
+        case 4: return (Math.floor(i / 2) + Math.floor(j / 3)) % 2 == 0;
+        case 5: return (i * j) % 2 + (i * j) % 3 == 0;
+        case 6: return ((i * j) % 2 + (i * j) % 3) % 2 == 0;
+        case 7: return ((i * j) % 3 + (i + j) % 2) % 2 == 0;
+        default: throw new Error("bad maskPattern:" + maskPattern);
+      }
+    },
+    getErrorCorrectPolynomial: function(errorCorrectLength) {
+      var a = new QRPolynomial([1], 0);
+      for (var i = 0; i < errorCorrectLength; i++) {
+        a = a.multiply(new QRPolynomial([1, QRMath.gexp(i)], 0));
+      }
+      return a;
+    },
+    getLostPoint: function(qrCode) {
+      var moduleCount = qrCode.getModuleCount();
+      var lostPoint = 0;
+      for (var row = 0; row < moduleCount; row++) {
+        for (var col = 0; col < moduleCount; col++) {
+          var sameCount = 0;
+          var dark = qrCode.isDark(row, col);
+          for (var r = -1; r <= 1; r++) {
+            if (row + r < 0 || moduleCount <= row + r) continue;
+            for (var c = -1; c <= 1; c++) {
+              if (col + c < 0 || moduleCount <= col + c) continue;
+              if (r == 0 && c == 0) continue;
+              if (dark == qrCode.isDark(row + r, col + c)) sameCount++;
+            }
+          }
+          if (sameCount > 5) lostPoint += (3 + sameCount - 5);
+        }
+      }
+      for (var row = 0; row < moduleCount - 1; row++) {
+        for (var col = 0; col < moduleCount - 1; col++) {
+          var count = 0;
+          if (qrCode.isDark(row, col)) count++;
+          if (qrCode.isDark(row + 1, col)) count++;
+          if (qrCode.isDark(row, col + 1)) count++;
+          if (qrCode.isDark(row + 1, col + 1)) count++;
+          if (count == 0 || count == 4) lostPoint += 3;
+        }
+      }
+      for (var row = 0; row < moduleCount; row++) {
+        for (var col = 0; col < moduleCount - 6; col++) {
+          if (qrCode.isDark(row, col) && !qrCode.isDark(row, col + 1) && qrCode.isDark(row, col + 2) && qrCode.isDark(row, col + 3) && qrCode.isDark(row, col + 4) && !qrCode.isDark(row, col + 5) && qrCode.isDark(row, col + 6)) {
+            lostPoint += 40;
+          }
+        }
+      }
+      for (var col = 0; col < moduleCount; col++) {
+        for (var row = 0; row < moduleCount - 6; row++) {
+          if (qrCode.isDark(row, col) && !qrCode.isDark(row + 1, col) && qrCode.isDark(row + 2, col) && qrCode.isDark(row + 3, col) && qrCode.isDark(row + 4, col) && !qrCode.isDark(row + 5, col) && qrCode.isDark(row + 6, col)) {
+            lostPoint += 40;
+          }
+        }
+      }
+      var darkCount = 0;
+      for (var col = 0; col < moduleCount; col++) {
+        for (var row = 0; row < moduleCount; row++) {
+          if (qrCode.isDark(row, col)) darkCount++;
+        }
+      }
+      var ratio = Math.abs(100 * darkCount / moduleCount / moduleCount - 50) / 5;
+      lostPoint += ratio * 10;
+      return lostPoint;
     }
   };
 
@@ -1307,7 +1434,6 @@ const QRCodeEngine = (function() {
   QRCodeModel.prototype = {
     addData: function(data) {
       var byteData = new QR8bitByte(data);
-      byteData.parsedData = stringToBytes(data);
       this.dataList.push(byteData);
       this.dataCache = null;
     },
@@ -1316,19 +1442,19 @@ const QRCodeEngine = (function() {
     make: function() {
       if (this.typeNumber < 1) {
         var typeNumber = 1;
-        for (typeNumber = 1; typeNumber < 40; typeNumber++) {
+        for (typeNumber = 1; typeNumber < 10; typeNumber++) {
           var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, this.errorCorrectLevel);
           var totalDataCount = 0;
           for (var i = 0; i < rsBlocks.length; i++) totalDataCount += rsBlocks[i].dataCount;
           var length = 0;
           for (var i = 0; i < this.dataList.length; i++) {
-            length += this.dataList[i].getLength() + 2;
+            length += 4 + 8 + this.dataList[i].getLength() * 8;
           }
           if (length <= totalDataCount * 8) break;
         }
-        this.typeNumber = Math.min(typeNumber, 10);
+        this.typeNumber = typeNumber;
       }
-      this.makeImpl(false, 0);
+      this.makeImpl(false, this.getBestMaskPattern());
     },
     makeImpl: function(test, maskPattern) {
       this.moduleCount = this.typeNumber * 4 + 17;
@@ -1340,8 +1466,9 @@ const QRCodeEngine = (function() {
       this.setupPositionProbePattern(0, 0);
       this.setupPositionProbePattern(this.moduleCount - 7, 0);
       this.setupPositionProbePattern(0, this.moduleCount - 7);
-      this.setupTimingPattern();
       this.setupPositionAdjustPattern();
+      this.setupTimingPattern();
+      this.setupTypeInfo(test, maskPattern);
       if (this.typeNumber >= 7) this.setupTypeNumber(test);
       if (this.dataCache == null) this.dataCache = QRCodeModel.createData(this.typeNumber, this.errorCorrectLevel, this.dataList);
       this.mapData(this.dataCache, maskPattern);
@@ -1359,6 +1486,18 @@ const QRCodeEngine = (function() {
         }
       }
     },
+    getBestMaskPattern: function() {
+      var minLostPoint = 0, pattern = 0;
+      for (var i = 0; i < 8; i++) {
+        this.makeImpl(true, i);
+        var lostPoint = QRUtil.getLostPoint(this);
+        if (i == 0 || minLostPoint > lostPoint) {
+          minLostPoint = lostPoint;
+          pattern = i;
+        }
+      }
+      return pattern;
+    },
     setupTimingPattern: function() {
       for (var r = 8; r < this.moduleCount - 8; r++) {
         if (this.modules[r][6] !== null) continue;
@@ -1370,7 +1509,7 @@ const QRCodeEngine = (function() {
       }
     },
     setupPositionAdjustPattern: function() {
-      var pos = [ [], [], [6, 18], [6, 22], [6, 26], [6, 30], [6, 34], [6, 22, 38], [6, 24, 42], [6, 26, 46], [6, 28, 50] ][this.typeNumber] || [];
+      var pos = QRUtil.getPatternPosition(this.typeNumber);
       for (var i = 0; i < pos.length; i++) {
         for (var j = 0; j < pos.length; j++) {
           var row = pos[i], col = pos[j];
@@ -1385,12 +1524,27 @@ const QRCodeEngine = (function() {
       }
     },
     setupTypeNumber: function(test) {
-      var bits = (this.typeNumber << 12);
+      var bits = QRUtil.getBCHTypeNumber(this.typeNumber);
       for (var i = 0; i < 18; i++) {
         var mod = (!test && ((bits >> i) & 1) == 1);
         this.modules[Math.floor(i / 3)][i % 3 + this.moduleCount - 8 - 3] = mod;
         this.modules[i % 3 + this.moduleCount - 8 - 3][Math.floor(i / 3)] = mod;
       }
+    },
+    setupTypeInfo: function(test, maskPattern) {
+      var data = (this.errorCorrectLevel << 3) | maskPattern;
+      var bits = QRUtil.getBCHTypeInfo(data);
+      for (var i = 0; i < 15; i++) {
+        var mod = (!test && ((bits >> i) & 1) == 1);
+        if (i < 6) this.modules[i][8] = mod;
+        else if (i < 8) this.modules[i + 1][8] = mod;
+        else this.modules[this.moduleCount - 15 + i][8] = mod;
+
+        if (i < 8) this.modules[8][this.moduleCount - i - 1] = mod;
+        else if (i < 9) this.modules[8][15 - i - 1 + 1] = mod;
+        else this.modules[8][15 - i - 1] = mod;
+      }
+      this.modules[this.moduleCount - 8][8] = !test;
     },
     mapData: function(data, maskPattern) {
       var inc = -1, row = this.moduleCount - 1, bitIndex = 7, byteIndex = 0;
@@ -1401,7 +1555,7 @@ const QRCodeEngine = (function() {
             if (this.modules[row][col - c] === null) {
               var dark = false;
               if (byteIndex < data.length) dark = (((data[byteIndex] >>> bitIndex) & 1) == 1);
-              var mask = ((row + (col - c)) % 2 == 0);
+              var mask = QRUtil.getMask(maskPattern, row, col - c);
               if (mask) dark = !dark;
               this.modules[row][col - c] = dark;
               bitIndex--;
@@ -1441,13 +1595,52 @@ const QRCodeEngine = (function() {
       if (buffer.length >= totalDataCount * 8) break;
       buffer.put(0x11, 8);
     }
-    return buffer.buffer;
+
+    var dcdata = new Array(rsBlocks.length);
+    var ecdata = new Array(rsBlocks.length);
+    var offset = 0;
+    var maxDcCount = 0, maxEcCount = 0;
+
+    for (var r = 0; r < rsBlocks.length; r++) {
+      var dcCount = rsBlocks[r].dataCount;
+      var ecCount = rsBlocks[r].totalCount - dcCount;
+      maxDcCount = Math.max(maxDcCount, dcCount);
+      maxEcCount = Math.max(maxEcCount, ecCount);
+
+      dcdata[r] = new Array(dcCount);
+      for (var i = 0; i < dcdata[r].length; i++) {
+        dcdata[r][i] = 0xff & buffer.buffer[i + offset];
+      }
+      offset += dcCount;
+
+      var rsPoly = QRUtil.getErrorCorrectPolynomial(ecCount);
+      var rawPoly = new QRPolynomial(dcdata[r], rsPoly.getLength() - 1);
+      var modPoly = rawPoly.mod(rsPoly);
+      ecdata[r] = new Array(rsPoly.getLength() - 1);
+      for (var i = 0; i < ecdata[r].length; i++) {
+        var modIndex = i + modPoly.getLength() - ecdata[r].length;
+        ecdata[r][i] = (modIndex >= 0) ? modPoly.get(modIndex) : 0;
+      }
+    }
+
+    var data = [];
+    for (var i = 0; i < maxDcCount; i++) {
+      for (var r = 0; r < rsBlocks.length; r++) {
+        if (i < dcdata[r].length) data.push(dcdata[r][i]);
+      }
+    }
+    for (var i = 0; i < maxEcCount; i++) {
+      for (var r = 0; r < rsBlocks.length; r++) {
+        if (i < ecdata[r].length) data.push(ecdata[r][i]);
+      }
+    }
+    return data;
   };
 
   return {
     drawToCanvas: function(canvas, text, size) {
       size = size || 300;
-      var qr = new QRCodeModel(0, 1);
+      var qr = new QRCodeModel(0, 0); // Level M (15% error correction)
       qr.addData(text);
       qr.make();
       var count = qr.getModuleCount();
@@ -2039,18 +2232,22 @@ function changeQuestionType(qIndex, newType) {
   renderQuestionsList();
 }
 
-async function saveSurveyAndPublish() {
+async function saveSurveyAndPublish(isSilent) {
   var title = document.getElementById("builderHeader").value.trim();
   var desc = document.getElementById("builderDesc").value.trim();
 
   if (!title) {
-    showToast("Vui lòng nhập Tiêu đề Khảo sát.", "error");
-    document.getElementById("builderHeader").focus();
+    if (!isSilent) {
+      showToast("Vui lòng nhập Tiêu đề Khảo sát.", "error");
+      document.getElementById("builderHeader").focus();
+    }
     return;
   }
 
   if (AppState.currentSurvey.questions.length === 0) {
-    showToast("Vui lòng thêm ít nhất 1 câu hỏi vào bài khảo sát.", "error");
+    if (!isSilent) {
+      showToast("Vui lòng thêm ít nhất 1 câu hỏi vào bài khảo sát.", "error");
+    }
     return;
   }
 
@@ -2095,30 +2292,40 @@ async function saveSurveyAndPublish() {
   var shareUrl = baseUrl + "#id=" + encodeURIComponent(AppState.currentSurvey.id);
 
   var linkEl = document.getElementById("surveyShareLink");
-  linkEl.textContent = shareUrl;
-  linkEl.setAttribute("data-url", shareUrl);
+  if (linkEl) {
+    linkEl.textContent = shareUrl;
+    linkEl.setAttribute("data-url", shareUrl);
+  }
 
   // Xóa bất kỳ link dự phòng offline cũ nếu có
   var existingFull = document.getElementById("surveyShareLinkFull");
   if (existingFull) existingFull.remove();
 
-  // QR tự sinh đồng bộ hoàn toàn với link tự sinh (#id), chuẩn quang học
+  // QR tự sinh đồng bộ hoàn toàn với link tự sinh (#id), chuẩn ISO
   var canvas = document.getElementById("qrCanvas");
-  try {
-    QRCodeEngine.drawToCanvas(canvas, shareUrl, 300);
-  } catch(e) {
-    console.error("QR generation failed:", e);
-    showToast("Tạo QR thất bại: " + e.message, "error");
+  if (canvas) {
+    try {
+      QRCodeEngine.drawToCanvas(canvas, shareUrl, 300);
+    } catch(e) {
+      console.error("QR generation failed:", e);
+      if (!isSilent) showToast("Tạo QR thất bại: " + e.message, "error");
+    }
   }
 
-  if (neonSynced) {
-    showToast("✓ Đã lưu & đồng bộ Neon thành công!", "success");
-    linkEl.style.borderColor = "";
-    linkEl.style.background = "";
-  } else {
-    showToast("⚠️ Đã lưu cục bộ: " + escHtml(syncErrorMsg).slice(0, 120), "error");
-    linkEl.style.borderColor = "#fca5a5";
-    linkEl.style.background = "#fff1f2";
+  if (!isSilent) {
+    if (neonSynced) {
+      showToast("✓ Đã lưu & đồng bộ Neon thành công!", "success");
+      if (linkEl) {
+        linkEl.style.borderColor = "";
+        linkEl.style.background = "";
+      }
+    } else {
+      showToast("⚠️ Đã lưu cục bộ: " + escHtml(syncErrorMsg).slice(0, 120), "error");
+      if (linkEl) {
+        linkEl.style.borderColor = "#fca5a5";
+        linkEl.style.background = "#fff1f2";
+      }
+    }
   }
 }
 
@@ -2927,16 +3134,18 @@ function createNewSurvey() {
         throw new Error("Survey not found on server (HTTP " + (res ? res.status : "unknown") + ")");
       } catch(err) {
         console.error("Load survey by ID failed:", err);
-        // Hiển thị lỗi và fallback về builder
-        document.body.innerHTML = '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#120e2a;color:#fff;padding:20px;text-align:center;"><div style="background:#1e1938;padding:32px;border-radius:16px;max-width:520px;border:1px solid rgba(255,255,255,0.15);"><h2 style="color:#f87171;margin-bottom:12px;">⚠️ Không tìm thấy khảo sát</h2><p style="color:#a3a1b8;margin-bottom:8px;">ID: <code style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;">' + escHtml(id) + '</code></p><p style="color:#a3a1b8;font-size:13px;margin-bottom:20px;">Khảo sát chưa được đồng bộ lên server Neon hoặc link đã hết hạn.<br>Vui lòng yêu cầu người tạo gửi lại link dự phòng (full) dạng <code>#survey=...</code> hoặc kiểm tra lại kết nối pages.dev.</p><button class="btn-primary" onclick="window.location.hash=&quot;&quot;;location.reload()">↩️ Về trang chủ</button></div></div>';
+        // Hiển thị thông báo Link Lỗi Rồi (người dùng tự đóng tab, tuyệt đối không có nút quay về admin)
+        document.body.innerHTML = '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#120e2a;color:#fff;padding:20px;text-align:center;"><div style="background:#1e1938;padding:36px;border-radius:16px;max-width:440px;border:1px solid rgba(255,255,255,0.15);box-shadow:0 20px 50px rgba(0,0,0,0.5);"><div style="font-size:48px;margin-bottom:16px;">⚠️</div><h2 style="color:#f87171;margin-bottom:12px;font-size:22px;font-weight:800;">Link Lỗi Rồi</h2><p style="color:#d1d5db;font-size:14px;line-height:1.6;margin:0;">Liên kết khảo sát này không tồn tại hoặc đã bị gỡ.<br>Vui lòng liên hệ người gửi để nhận link mới.</p></div></div>';
       }
     })();
     return;
   }
 
   loadBootcampPreset();
-  // Đảm bảo DOM đã sẵn sàng trước khi tạo QR (tránh race với canvas chưa render)
-  setTimeout(function(){ saveSurveyAndPublish(); }, 100);
+  setTimeout(function(){
+    saveSurveyAndPublish(true);
+    showToast("Hệ thống đã sẵn sàng", "success");
+  }, 100);
 })();
 
 </script>
