@@ -214,20 +214,21 @@ export async function onRequest(context) {
     // 2. CHECK ĐÃ NỘP CHƯA: GET /api/responses/check?survey_id=...&msnv=...
     if (path === '/api/responses/check' && request.method === 'GET') {
       const surveyId = url.searchParams.get('survey_id') || url.searchParams.get('surveyId') || url.searchParams.get('id');
-      const msnv = (url.searchParams.get('msnv') || url.searchParams.get('employee_msnv') || '').trim();
+      const msnvRaw = (url.searchParams.get('msnv') || url.searchParams.get('employee_msnv') || '').trim();
+      const msnv = msnvRaw.toUpperCase();
       const clientIp = getClientIP(request);
 
       if (!surveyId) {
         return new Response(JSON.stringify({ error: 'survey_id required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
-      // Tìm bản ghi trùng IP hoặc MSNV trên cùng survey_id
+      // Tìm bản ghi trùng IP hoặc MSNV trên cùng survey_id (case-insensitive cho MSNV)
       let rows = [];
       if (msnv && clientIp) {
         rows = await queryNeon(
           DB_URL,
           `SELECT id, survey_id, employee_msnv, employee_name, employee_dept, answers, submitted_at, client_ip
-           FROM responses WHERE survey_id = $1 AND (client_ip = $2 OR employee_msnv = $3) LIMIT 1;`,
+           FROM responses WHERE survey_id = $1 AND (client_ip = $2 OR UPPER(employee_msnv) = $3) LIMIT 1;`,
           [surveyId, clientIp, msnv]
         );
       } else if (clientIp) {
@@ -241,7 +242,7 @@ export async function onRequest(context) {
         rows = await queryNeon(
           DB_URL,
           `SELECT id, survey_id, employee_msnv, employee_name, employee_dept, answers, submitted_at, client_ip
-           FROM responses WHERE survey_id = $1 AND employee_msnv = $2 LIMIT 1;`,
+           FROM responses WHERE survey_id = $1 AND UPPER(employee_msnv) = $2 LIMIT 1;`,
           [surveyId, msnv]
         );
       }
@@ -262,7 +263,7 @@ export async function onRequest(context) {
       }
     }
 
-    // 3. Nộp bài khảo sát: POST /api/responses  (có chặn trùng IP+MSNV)
+    // 3. Nộp bài khảo sát: POST /api/responses  (có chặn trùng IP+MSNV + validate LEP)
     if (path === '/api/responses' && request.method === 'POST') {
       const body = await request.json();
       const {
@@ -275,8 +276,17 @@ export async function onRequest(context) {
       } = body;
 
       const clientIp = getClientIP(request);
-      const msnvTrim = (employee_msnv || '').trim();
+      const msnvTrimRaw = (employee_msnv || '').trim();
+      const msnvTrim = msnvTrimRaw.toUpperCase();
       const sid = survey_id || 'DEFAULT';
+
+      // Validate MSNV phải bắt đầu bằng LEP, sau là chữ/số
+      if (msnvTrim && !/^LEP[A-Z0-9]+$/.test(msnvTrim)) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'MSNV phải bắt đầu bằng "LEP" và sau LEP chỉ chứa chữ/số (ví dụ: LEP123, LEPA12). Bạn đã nhập: ' + msnvTrimRaw
+        }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
 
       // Kiểm tra trùng: IP hoặc MSNV đã nộp cho survey này chưa
       if (sid && (clientIp || msnvTrim)) {
@@ -284,13 +294,13 @@ export async function onRequest(context) {
         if (clientIp && msnvTrim) {
           dupRows = await queryNeon(
             DB_URL,
-            `SELECT id FROM responses WHERE survey_id = $1 AND (client_ip = $2 OR employee_msnv = $3) LIMIT 1;`,
+            `SELECT id FROM responses WHERE survey_id = $1 AND (client_ip = $2 OR UPPER(employee_msnv) = $3) LIMIT 1;`,
             [sid, clientIp, msnvTrim]
           );
         } else if (clientIp) {
           dupRows = await queryNeon(DB_URL, `SELECT id FROM responses WHERE survey_id = $1 AND client_ip = $2 LIMIT 1;`, [sid, clientIp]);
         } else if (msnvTrim) {
-          dupRows = await queryNeon(DB_URL, `SELECT id FROM responses WHERE survey_id = $1 AND employee_msnv = $2 LIMIT 1;`, [sid, msnvTrim]);
+          dupRows = await queryNeon(DB_URL, `SELECT id FROM responses WHERE survey_id = $1 AND UPPER(employee_msnv) = $2 LIMIT 1;`, [sid, msnvTrim]);
         }
         const dupList = Array.isArray(dupRows) ? dupRows : (dupRows && dupRows.rows ? dupRows.rows : []);
         if (dupList.length > 0) {
@@ -310,7 +320,7 @@ export async function onRequest(context) {
            RETURNING id;`,
           [
             sid,
-            employee_msnv || '',
+            msnvTrim || '',
             employee_name || '',
             employee_dept || '',
             answersStr,

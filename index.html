@@ -1100,7 +1100,8 @@ textarea.form-control {
 
       <div class="survey-field">
         <label class="survey-field-label">Mã Số Nhân Viên (MSNV) <span class="req">*</span></label>
-        <input type="text" id="pvMsnv" class="survey-input" placeholder="" autocomplete="off">
+        <input type="text" id="pvMsnv" class="survey-input" placeholder="LEP..." autocomplete="off" autocapitalize="characters" spellcheck="false" oninput="handleMsnvInput(this)" onfocus="handleMsnvFocus(this)">
+        <div style="font-size:12px;color:#a5a3bd;margin-top:6px;line-height:1.4;">Bắt buộc bắt đầu bằng <b style="color:#fff;">LEP</b> (ví dụ: <code style="background:rgba(255,255,255,0.1);padding:1px 5px;border-radius:4px;">LEP123</code>, <code style="background:rgba(255,255,255,0.1);padding:1px 5px;border-radius:4px;">LEP001</code>, <code style="background:rgba(255,255,255,0.1);padding:1px 5px;border-radius:4px;">LEPA12</code>). Hệ thống tự gợi ý <b>LEP</b>, bạn chỉ cần nhập phần sau.</div>
       </div>
 
       <div class="survey-field">
@@ -2690,8 +2691,32 @@ function toggleDeptCustomInput(val) {
   }
 }
 
+function handleMsnvFocus(el) {
+  if (!el.value.trim()) {
+    el.value = "LEP";
+    // đặt con trỏ sau LEP
+    setTimeout(function(){ try{ el.setSelectionRange(3,3); }catch(e){} }, 0);
+  }
+}
+function handleMsnvInput(el) {
+  var v = el.value;
+  // Tự động chuyển prefix lep -> LEP
+  if (v.length >= 3 && v.slice(0,3).toLowerCase() === "lep" && v.slice(0,3) !== "LEP") {
+    var rest = v.slice(3);
+    el.value = "LEP" + rest;
+    // giữ vị trí con trỏ
+  }
+  // Nếu người dùng xóa LEP, không ép ngay để tránh khó chịu, chỉ gợi ý
+}
+
+function isValidMsnv(msnv) {
+  // Bắt buộc bắt đầu LEP, sau LEP là 1+ ký tự chữ/số, tổng độ dài >=4
+  return /^LEP[A-Za-z0-9]+$/.test(msnv);
+}
+
 async function proceedToQuestions() {
-  var msnv = document.getElementById("pvMsnv").value.trim();
+  var msnvRaw = document.getElementById("pvMsnv").value.trim();
+  var msnv = msnvRaw.toUpperCase(); // chuẩn hóa LEP hoa
   var name = document.getElementById("pvFullName").value.trim();
   var deptSelect = document.getElementById("pvDeptSelect").value;
   var dept = deptSelect === "Khác" ? document.getElementById("pvDeptCustom").value.trim() : deptSelect;
@@ -2701,6 +2726,21 @@ async function proceedToQuestions() {
     document.getElementById("pvMsnv").focus();
     return;
   }
+  // Bắt buộc MSNV phải bắt đầu bằng LEP, sau LEP là chữ/số (tuỳ tình huống)
+  if (!isValidMsnv(msnv)) {
+    if (!/^LEP/i.test(msnv)) {
+      // Gợi ý nếu chỉ nhập số/thiếu LEP
+      var suggestion = /^LEP/i.test(msnvRaw) ? "" : " (gợi ý: LEP" + msnvRaw + ")";
+      showToast("MSNV phải bắt đầu bằng \"LEP\" (ví dụ: LEP123, LEPA12). Vui lòng nhập đúng" + suggestion + ".", "error");
+    } else {
+      showToast("Sau \"LEP\" chỉ được chứa chữ và số, không dấu/cách (ví dụ: LEP123, LEPA12).", "error");
+    }
+    document.getElementById("pvMsnv").value = msnv; // đồng bộ hiển thị hoa
+    document.getElementById("pvMsnv").focus();
+    return;
+  }
+  // đồng bộ lại ô nhập đã chuẩn hóa hoa
+  document.getElementById("pvMsnv").value = msnv;
   if (!name) {
     showToast("Vui lòng nhập Họ và Tên của bạn.", "error");
     document.getElementById("pvFullName").focus();

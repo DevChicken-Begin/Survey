@@ -184,16 +184,17 @@ export default {
       // CHECK đã nộp chưa
       if (path === '/api/responses/check' && request.method === 'GET') {
         const surveyId = url.searchParams.get('survey_id') || url.searchParams.get('surveyId') || url.searchParams.get('id');
-        const msnv = (url.searchParams.get('msnv') || url.searchParams.get('employee_msnv') || '').trim();
+        const msnvRaw = (url.searchParams.get('msnv') || url.searchParams.get('employee_msnv') || '').trim();
+        const msnv = msnvRaw.toUpperCase();
         const clientIp = getClientIP(request);
         if (!surveyId) return new Response(JSON.stringify({ error: 'survey_id required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         let rows = [];
         if (msnv && clientIp) {
-          rows = await queryNeon(DB_URL, `SELECT id, survey_id, employee_msnv, employee_name, employee_dept, answers, submitted_at, client_ip FROM responses WHERE survey_id = $1 AND (client_ip = $2 OR employee_msnv = $3) LIMIT 1;`, [surveyId, clientIp, msnv]);
+          rows = await queryNeon(DB_URL, `SELECT id, survey_id, employee_msnv, employee_name, employee_dept, answers, submitted_at, client_ip FROM responses WHERE survey_id = $1 AND (client_ip = $2 OR UPPER(employee_msnv) = $3) LIMIT 1;`, [surveyId, clientIp, msnv]);
         } else if (clientIp) {
           rows = await queryNeon(DB_URL, `SELECT id, survey_id, employee_msnv, employee_name, employee_dept, answers, submitted_at, client_ip FROM responses WHERE survey_id = $1 AND client_ip = $2 LIMIT 1;`, [surveyId, clientIp]);
         } else if (msnv) {
-          rows = await queryNeon(DB_URL, `SELECT id, survey_id, employee_msnv, employee_name, employee_dept, answers, submitted_at, client_ip FROM responses WHERE survey_id = $1 AND employee_msnv = $2 LIMIT 1;`, [surveyId, msnv]);
+          rows = await queryNeon(DB_URL, `SELECT id, survey_id, employee_msnv, employee_name, employee_dept, answers, submitted_at, client_ip FROM responses WHERE survey_id = $1 AND UPPER(employee_msnv) = $2 LIMIT 1;`, [surveyId, msnv]);
         }
         const rowsList = Array.isArray(rows) ? rows : (rows && rows.rows ? rows.rows : []);
         if (rowsList.length > 0) {
@@ -219,14 +220,19 @@ export default {
         } = body;
 
         const clientIp = getClientIP(request);
-        const msnvTrim = (employee_msnv||'').trim();
+        const msnvTrimRaw = (employee_msnv||'').trim();
+        const msnvTrim = msnvTrimRaw.toUpperCase();
         const sid = survey_id || 'DEFAULT';
+
+        if (msnvTrim && !/^LEP[A-Z0-9]+$/.test(msnvTrim)) {
+          return new Response(JSON.stringify({ success:false, error:'MSNV phải bắt đầu bằng "LEP" và sau LEP chỉ chứa chữ/số (ví dụ: LEP123, LEPA12). Bạn đã nhập: '+msnvTrimRaw }), { status:400, headers:{...corsHeaders,'Content-Type':'application/json'}});
+        }
 
         if (sid && (clientIp || msnvTrim)) {
           let dupRows=[];
-          if (clientIp && msnvTrim) dupRows = await queryNeon(DB_URL, `SELECT id FROM responses WHERE survey_id=$1 AND (client_ip=$2 OR employee_msnv=$3) LIMIT 1;`, [sid, clientIp, msnvTrim]);
+          if (clientIp && msnvTrim) dupRows = await queryNeon(DB_URL, `SELECT id FROM responses WHERE survey_id=$1 AND (client_ip=$2 OR UPPER(employee_msnv)=$3) LIMIT 1;`, [sid, clientIp, msnvTrim]);
           else if (clientIp) dupRows = await queryNeon(DB_URL, `SELECT id FROM responses WHERE survey_id=$1 AND client_ip=$2 LIMIT 1;`, [sid, clientIp]);
-          else if (msnvTrim) dupRows = await queryNeon(DB_URL, `SELECT id FROM responses WHERE survey_id=$1 AND employee_msnv=$2 LIMIT 1;`, [sid, msnvTrim]);
+          else if (msnvTrim) dupRows = await queryNeon(DB_URL, `SELECT id FROM responses WHERE survey_id=$1 AND UPPER(employee_msnv)=$2 LIMIT 1;`, [sid, msnvTrim]);
           const dupList = Array.isArray(dupRows)?dupRows:(dupRows&&dupRows.rows?dupRows.rows:[]);
           if (dupList.length>0) return new Response(JSON.stringify({ success:false, error:'Bạn đã nộp khảo sát này rồi. Mỗi thiết bị/IP và MSNV chỉ được tham gia 1 lần. Nếu muốn làm lại hãy liên hệ nhân sự.' }), { status:409, headers:{...corsHeaders,'Content-Type':'application/json'}});
         }
@@ -240,7 +246,7 @@ export default {
              RETURNING id;`,
             [
               sid,
-              employee_msnv || '',
+              msnvTrim || '',
               employee_name || '',
               employee_dept || '',
               answersStr,
