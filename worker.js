@@ -17,13 +17,9 @@ function getNeonHost(dbUrl) {
 
 function getClientIP(request) {
   const h = request.headers;
-  return (
-    h.get('CF-Connecting-IP') ||
-    h.get('X-Forwarded-For')?.split(',')[0]?.trim() ||
-    h.get('X-Real-IP') ||
-    h.get('True-Client-IP') ||
-    ''
-  ).trim();
+  const cfIp = (h.get('CF-Connecting-IP') || h.get('True-Client-IP') || '').trim();
+  if (cfIp) return cfIp;
+  return (h.get('X-Real-IP') || '').trim();
 }
 
 function getAdminCredentials(env) {
@@ -34,16 +30,11 @@ function getAdminCredentials(env) {
 }
 
 function isAdminAuthorized(request, env) {
+  const creds = getAdminCredentials(env);
   const headerKey = (request.headers.get('x-admin-key') || request.headers.get('X-Admin-Key') || '').trim();
   const authHeader = (request.headers.get('Authorization') || '').trim();
   let token = headerKey;
   if (!token && authHeader.toLowerCase().startsWith('bearer ')) token = authHeader.slice(7).trim();
-  if (env.ADMIN_PASS || env.ADMIN_PASSWORD || env.ADMIN_USER || env.ADMIN_USERNAME) {
-    const creds = getAdminCredentials(env);
-    return token === creds.pass;
-  }
-  if (!token) return true;
-  const creds = getAdminCredentials(env);
   return token === creds.pass;
 }
 

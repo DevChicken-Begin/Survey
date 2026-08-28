@@ -20,16 +20,12 @@ function getNeonHost(dbUrl) {
 }
 
 function getClientIP(request) {
-  // Cloudflare Pages Functions: CF-Connecting-IP là chuẩn, fallback các header phổ biến
+  // Ưu tiên CF-Connecting-IP (Cloudflare Pages đáng tin), không tin X-Forwarded-For do client tự gửi
   const h = request.headers;
-  return (
-    h.get('CF-Connecting-IP') ||
-    h.get('X-Forwarded-For')?.split(',')[0]?.trim() ||
-    h.get('X-Real-IP') ||
-    h.get('CF-IP') ||
-    h.get('True-Client-IP') ||
-    ''
-  ).trim();
+  const cfIp = (h.get('CF-Connecting-IP') || h.get('True-Client-IP') || '').trim();
+  if (cfIp) return cfIp;
+  // Fallback cho wrangler dev local
+  return (h.get('X-Real-IP') || '').trim();
 }
 
 function getAdminCredentials(env) {
@@ -41,19 +37,13 @@ function getAdminCredentials(env) {
 
 function isAdminAuthorized(request, env) {
   const creds = getAdminCredentials(env);
-  // Nếu chưa cấu hình env thì cho phép (dev mode) – nhưng vẫn check nếu client gửi key
   const headerKey = (request.headers.get('x-admin-key') || request.headers.get('X-Admin-Key') || '').trim();
   const authHeader = (request.headers.get('Authorization') || '').trim();
   let token = headerKey;
   if (!token && authHeader.toLowerCase().startsWith('bearer ')) {
     token = authHeader.slice(7).trim();
   }
-  // Nếu env có cấu hình thì bắt buộc khớp pass
-  if (env.ADMIN_PASS || env.ADMIN_PASSWORD || env.ADMIN_USER || env.ADMIN_USERNAME) {
-    return token === creds.pass;
-  }
-  // Dev mode không cấu hình: cho phép nếu không gửi key, hoặc cho phép nếu gửi đúng admin123
-  if (!token) return true;
+  // Luôn yêu cầu khớp pass (đã đọc từ Cloudflare env, fallback admin/admin123 chỉ dùng cho Pages env chưa set)
   return token === creds.pass;
 }
 

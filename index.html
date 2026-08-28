@@ -1338,22 +1338,7 @@ async function handleAdminLogin(event) {
       if (errEl) { errEl.textContent = msg; errEl.classList.remove('hidden'); }
     }
   } catch (e) {
-    // Fallback cho dev không có backend (cho phép admin/admin123 cục bộ)
-    if (username === 'admin' && password === 'admin123') {
-      localStorage.setItem(ADMIN_AUTH_FLAG, '1');
-      localStorage.setItem(ADMIN_AUTH_USER, username);
-      localStorage.setItem(ADMIN_AUTH_KEY, password);
-      localStorage.setItem('survey_admin_key', password);
-      hideAdminLogin();
-      showToast('Đăng nhập thành công (offline mode)!', 'success');
-      try {
-        if (!document.getElementById('builderHeader').value && AppState.currentSurvey.questions.length === 0) {
-          loadBootcampPreset();
-        }
-      } catch(e){}
-    } else {
-      if (errEl) { errEl.textContent = 'Không kết nối được server: ' + e.message; errEl.classList.remove('hidden'); }
-    }
+    if (errEl) { errEl.textContent = 'Không kết nối được server: ' + e.message + ' (kiểm tra Cloudflare Pages Functions & env ADMIN_USER/ADMIN_PASS)'; errEl.classList.remove('hidden'); }
   }
   if (btn) { btn.disabled = false; btn.textContent = 'Đăng Nhập'; }
 }
@@ -2613,11 +2598,30 @@ function copyShareUrl() {
     showToast("Vui lòng bấm 'Lưu khảo sát' trước để tạo Link.", "error");
     return;
   }
-  navigator.clipboard.writeText(url).then(function() {
-    showToast("Đã sao chép link khảo sát vào Clipboard!", "success");
-  }).catch(function() {
-    showToast("Sao chép link thất bại, vui lòng copy thủ công.", "error");
-  });
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(function() {
+      showToast("Đã sao chép link khảo sát vào Clipboard!", "success");
+    }).catch(function() {
+      fallbackCopy(url);
+    });
+  } else {
+    fallbackCopy(url);
+  }
+  function fallbackCopy(text) {
+    try {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      showToast("Đã sao chép link khảo sát vào Clipboard!", "success");
+    } catch(e) {
+      showToast("Sao chép thất bại, vui lòng copy thủ công: " + text, "error");
+    }
+  }
 }
 
 function downloadQRCode() {
@@ -2967,12 +2971,7 @@ async function submitSurveyResponse() {
     submitted_at: new Date().toISOString()
   };
 
-  // Lưu cục bộ trước
-  try {
-    await DB.saveResponse(payload);
-  } catch(e) { console.warn("IndexedDB save failed:", e); }
-
-  // Ghi vào Neon qua Pages Functions (pages.dev) – có chặn trùng IP+MSNV server side
+  // Ghi vào Neon qua Pages Functions (pages.dev) – có chặn trùng IP+MSNV server side (ưu tiên Neon, chỉ lưu IndexedDB khi thành công hoặc offline)
   var neonSynced = false;
   var neonErr = "";
   var isDuplicate = false;
@@ -3010,14 +3009,17 @@ async function submitSurveyResponse() {
   }
 
   if (neonSynced) {
+    // Lưu IndexedDB chỉ khi Neon thành công để tránh duplicate local khi 409
+    try { await DB.saveResponse(payload); } catch(e){ console.warn("IndexedDB save failed:", e); }
     showToast("Gửi bài khảo sát thành công!", "success");
     // Đánh dấu đã nộp: localStorage + lock vĩnh viễn đến khi admin xóa
     try { localStorage.setItem('survey_done_' + survey.id, '1'); } catch(e){}
     try { localStorage.setItem('survey_done_data_' + survey.id, JSON.stringify(payload)); } catch(e){}
   } else if (isDuplicate) {
-    // đã xử lý ở trên
+    // đã xử lý ở trên – không lưu local để tránh phình
   } else {
-    // Lưu cục bộ fallback nhưng vẫn chặn lần sau bằng localStorage để tránh spam khi offline
+    // Offline / lỗi mạng: lưu cục bộ fallback nhưng vẫn chặn lần sau bằng localStorage để tránh spam
+    try { await DB.saveResponse(payload); } catch(e){ console.warn("IndexedDB save failed:", e); }
     try { localStorage.setItem('survey_done_' + survey.id, '1'); } catch(e){}
     showToast("Đã lưu bài khảo sát cục bộ (offline)! Sẽ đồng bộ khi có mạng.", "info");
   }
@@ -3501,6 +3503,21 @@ function createNewSurvey() {
   document.getElementById("builderDesc").value = "";
   renderQuestionsList();
   switchAdminTab("builder");
+  // Reset Link/QR về trạng thái chưa lưu
+  var linkEl = document.getElementById("surveyShareLink");
+  if (linkEl) {
+    linkEl.textContent = "Chưa lưu khảo sát. Bấm \"LƯU KHẢO SÁT & TẠO LINK / QR CODE\" để sinh link.";
+    linkEl.removeAttribute("data-url");
+    linkEl.style.borderColor = "";
+    linkEl.style.background = "";
+  }
+  var canvas = document.getElementById("qrCanvas");
+  if (canvas) {
+    try {
+      var ctx = canvas.getContext("2d");
+      if (ctx) { ctx.clearRect(0,0,canvas.width,canvas.height); ctx.fillStyle="#ffffff"; ctx.fillRect(0,0,canvas.width,canvas.height); }
+    } catch(e){}
+  }
 }
 
 /* =========================================================================
