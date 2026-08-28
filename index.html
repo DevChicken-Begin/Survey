@@ -1229,6 +1229,26 @@ textarea.form-control {
     </div>
   </div>
 </div>
+
+<!-- MODAL: CONFIRM RETAKE (CHO PHEP LAM LAI) -->
+<div id="retakeConfirmModal" class="modal-overlay hidden">
+  <div class="modal-content" style="max-width:460px;border-top:4px solid var(--warning);">
+    <div class="modal-header">
+      <h3 style="color:#92400e;font-size:18px;">🔓 Xác Nhận Cho Phép Làm Lại</h3>
+      <button class="btn-secondary btn-icon" onclick="closeRetakeModal()">✕</button>
+    </div>
+    <div class="modal-body" style="font-size:14px;color:#374151;line-height:1.6;">
+      Bạn có chắc muốn cho phép <b id="retakeTargetInfo" style="color:#1f2937;"></b> làm lại khảo sát?<br><br>
+      <div style="background:#fef3c7;border:1px solid #fcd34d;padding:10px 12px;border-radius:8px;font-size:13px;color:#92400e;">
+        ⚠️ Thao tác này sẽ <b>XÓA bài nộp hiện tại</b> và mở khóa <b>IP/MSNV</b> để người đó có thể quét QR/link làm lại. Không thể hoàn tác.
+      </div>
+    </div>
+    <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:10px;">
+      <button class="btn-secondary" onclick="closeRetakeModal()">Hủy</button>
+      <button class="btn-primary" id="confirmRetakeBtn" onclick="confirmRetake()" style="background:#f59e0b;border-color:#f59e0b;">Xác Nhận Cho Phép Làm Lại</button>
+    </div>
+  </div>
+</div>
 <script>
 /* =========================================================================
    ⚙️ CẤU HÌNH API BACKEND CLOUDFLARE WORKER & NEON DATABASE
@@ -1306,11 +1326,10 @@ async function handleAdminLogin(event) {
       if (errEl) errEl.classList.add('hidden');
       hideAdminLogin();
       showToast('Đăng nhập thành công!', 'success');
-      // Nếu vừa login lần đầu, khởi tạo builder nếu chưa có dữ liệu
+      // Nếu vừa login lần đầu, chỉ nạp mẫu hiển thị, không tự lưu
       try {
         if (!document.getElementById('builderHeader').value && AppState.currentSurvey.questions.length === 0) {
           loadBootcampPreset();
-          setTimeout(function(){ saveSurveyAndPublish(true); }, 200);
         }
       } catch(e){}
       try { refreshDataList(); } catch(e){}
@@ -1330,7 +1349,6 @@ async function handleAdminLogin(event) {
       try {
         if (!document.getElementById('builderHeader').value && AppState.currentSurvey.questions.length === 0) {
           loadBootcampPreset();
-          setTimeout(function(){ saveSurveyAndPublish(true); }, 200);
         }
       } catch(e){}
     } else {
@@ -3268,11 +3286,28 @@ async function executePurgeData() {
   showToast("Đã xóa toàn bộ dữ liệu trên hệ thống thành công! Dung lượng đã được giải phóng.", "success");
 }
 
-async function allowRetake(responseId) {
+var __retakePendingId = null;
+function openRetakeModal(responseId) {
+  var rec = (AppState.cachedResponses || []).find(function(r){ return String(r.id) === String(responseId); });
+  var info = rec ? (rec.employee_name + ' (' + rec.employee_msnv + ')') : ('ID ' + responseId);
+  __retakePendingId = responseId;
+  var infoEl = document.getElementById('retakeTargetInfo');
+  if (infoEl) infoEl.textContent = info;
+  var modal = document.getElementById('retakeConfirmModal');
+  if (modal) modal.classList.remove('hidden');
+}
+function closeRetakeModal() {
+  __retakePendingId = null;
+  var modal = document.getElementById('retakeConfirmModal');
+  if (modal) modal.classList.add('hidden');
+}
+async function confirmRetake() {
+  var responseId = __retakePendingId;
   if (!responseId) return;
   var rec = (AppState.cachedResponses || []).find(function(r){ return String(r.id) === String(responseId); });
   var info = rec ? (rec.employee_name + ' (' + rec.employee_msnv + ')') : ('ID ' + responseId);
-  if (!confirm('Xác nhận cho phép làm lại cho ' + info + '?\nThao tác này sẽ XÓA bài nộp hiện tại và mở khóa IP/MSNV để người đó có thể quét QR/link làm lại.')) return;
+  var btn = document.getElementById('confirmRetakeBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang xử lý...'; }
   try {
     var apiUrl = buildApiUrl('/api/responses?id=' + encodeURIComponent(responseId));
     var res = await fetch(apiUrl, {
@@ -3284,12 +3319,17 @@ async function allowRetake(responseId) {
       var msg = data && data.error ? data.error : ('HTTP ' + res.status);
       throw new Error(msg);
     }
+    closeRetakeModal();
     showToast('Đã xóa bài của ' + info + ' và mở khóa. Người đó có thể làm lại ngay.', 'success');
-    // Refresh list ngay
     await refreshDataList();
   } catch(e) {
     showToast('Cho phép làm lại thất bại: ' + e.message, 'error');
   }
+  if (btn) { btn.disabled = false; btn.textContent = 'Xác Nhận Cho Phép Làm Lại'; }
+}
+async function allowRetake(responseId) {
+  if (!responseId) return;
+  openRetakeModal(responseId);
 }
 
 /* =========================================================================
@@ -3566,9 +3606,23 @@ async function handleSurveyLoadWithLock(survey) {
   var authed = checkAdminAuthOnLoad();
   if (!authed) return;
   loadBootcampPreset();
+  // Không tự động lưu – chỉ nạp mẫu hiển thị, Link/QR chỉ sinh khi bấm LƯU
   setTimeout(function(){
-    saveSurveyAndPublish(true);
-    showToast("Hệ thống đã sẵn sàng", "success");
+    var linkEl = document.getElementById("surveyShareLink");
+    if (linkEl) {
+      linkEl.textContent = "Chưa lưu khảo sát. Bấm \"LƯU KHẢO SÁT & TẠO LINK / QR CODE\" để sinh link.";
+      linkEl.removeAttribute("data-url");
+      linkEl.style.borderColor = "";
+      linkEl.style.background = "";
+    }
+    var canvas = document.getElementById("qrCanvas");
+    if (canvas) {
+      try {
+        var ctx = canvas.getContext("2d");
+        if (ctx) { ctx.clearRect(0,0,canvas.width,canvas.height); ctx.fillStyle="#ffffff"; ctx.fillRect(0,0,canvas.width,canvas.height); }
+      } catch(e){}
+    }
+    showToast("Mẫu khảo sát đã nạp sẵn. Chỉ khi bấm Lưu mới tạo Link/QR và lưu vào Khảo Sát Đã Lưu.", "info");
   }, 100);
 })();
 
