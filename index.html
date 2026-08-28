@@ -799,11 +799,84 @@ textarea.form-control {
   }
 }
 
+/* ADMIN LOGIN */
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 12, 32, 0.94);
+  backdrop-filter: blur(10px);
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.login-card {
+  background: #ffffff;
+  color: #1e1b30;
+  border-radius: 16px;
+  padding: 36px 32px;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.4);
+  border-top: 4px solid var(--primary);
+}
+.login-card h2 {
+  font-size: 22px;
+  font-weight: 800;
+  font-family: 'Outfit', sans-serif;
+  margin-bottom: 6px;
+  color: #120e2a;
+}
+.login-card .login-sub {
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 22px;
+}
+.login-field { margin-bottom: 16px; }
+.login-field label { display:block; font-size:13px; font-weight:600; color:#4b4860; margin-bottom:6px; }
+.login-actions { margin-top:22px; }
+.login-error {
+  background:#fee2e2;
+  border:1px solid #fca5a5;
+  color:#991b1b;
+  padding:10px 12px;
+  border-radius:8px;
+  font-size:13px;
+  margin-bottom:16px;
+}
+
 </style>
 </head>
 <body>
 
 <div id="toastContainer"></div>
+
+<!-- ADMIN LOGIN OVERLAY -->
+<div id="adminLoginOverlay" class="login-overlay hidden">
+  <div class="login-card">
+    <div style="text-align:center;margin-bottom:18px;">
+      <div style="font-size:40px;">🔒</div>
+      <h2>Đăng Nhập Quản Trị</h2>
+      <p class="login-sub">Vui lòng đăng nhập để quản lý khảo sát và dữ liệu</p>
+    </div>
+    <div id="loginErrorEl" class="login-error hidden"></div>
+    <form id="adminLoginForm" onsubmit="handleAdminLogin(event)" autocomplete="off">
+      <div class="login-field">
+        <label for="loginUsername">Tài khoản</label>
+        <input type="text" id="loginUsername" class="form-control" placeholder="Nhập tài khoản" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      </div>
+      <div class="login-field">
+        <label for="loginPassword">Mật khẩu</label>
+        <input type="password" id="loginPassword" class="form-control" placeholder="Nhập mật khẩu" autocomplete="new-password" spellcheck="false">
+      </div>
+      <div class="login-actions">
+        <button type="submit" id="loginSubmitBtn" class="btn-primary" style="width:100%;padding:12px;font-size:15px;">Đăng Nhập</button>
+      </div>
+      <p style="font-size:11px;color:#9ca3af;text-align:center;margin-top:12px;">Ghi nhớ vĩnh viễn trên thiết bị này</p>
+    </form>
+  </div>
+</div>
 
 <!-- ADMIN VIEW -->
 <div id="adminView">
@@ -970,7 +1043,7 @@ textarea.form-control {
 
           <div class="data-filter-bar">
             <div class="search-input-wrap">
-              <input type="text" id="dataSearchInput" class="form-control" placeholder="🔍 Tìm kiếm theo MSNV, Họ tên, Bộ phận..." oninput="filterResponsesTable()">
+              <input type="text" id="dataSearchInput" class="form-control" placeholder="🔍 Tìm kiếm theo MSNV, Họ tên, Bộ phận, IP..." oninput="filterResponsesTable()">
             </div>
             <select id="dataDeptFilter" class="form-control" style="width:200px;" onchange="filterResponsesTable()">
               <option value="">Tất cả Bộ phận</option>
@@ -986,13 +1059,14 @@ textarea.form-control {
                   <th>MSNV</th>
                   <th>Họ và Tên</th>
                   <th>Bộ Phận</th>
+                  <th>IP</th>
                   <th>Chi Tiết Trả Lời</th>
                   <th style="text-align:right;">Thao Tác</th>
                 </tr>
               </thead>
               <tbody id="responsesTableBody">
                 <tr>
-                  <td colspan="7" style="text-align:center;padding:40px;color:#9ca3af;">
+                  <td colspan="8" style="text-align:center;padding:40px;color:#9ca3af;">
                     Chưa có phản hồi nào. Hãy chia sẻ link/QR cho nhân viên làm khảo sát!
                   </td>
                 </tr>
@@ -1081,10 +1155,14 @@ textarea.form-control {
     <div id="pvStepThankYou" class="thankyou-box hidden">
       <div class="thankyou-icon">✓</div>
       <h2 style="font-size:26px;font-weight:800;margin-bottom:12px;font-family:'Outfit',sans-serif;">Cảm Ơn Bạn Đã Hoàn Thành Khảo Sát!</h2>
-      <p style="font-size:15px;color:#d1d5db;margin-bottom:24px;line-height:1.6;">
+      <p style="font-size:15px;color:#d1d5db;margin-bottom:12px;line-height:1.6;">
         Ý kiến đóng góp của bạn đã được ghi vào hệ thống Leggett & Platt.<br>
         Thông tin phản hồi sẽ được tổng hợp để cải thiện chất lượng công việc.
       </p>
+      <div style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px 16px;margin-bottom:24px;font-size:13px;color:#e0e0ed;line-height:1.5;">
+        🔒 Mỗi thiết bị/IP và MSNV chỉ được tham gia 1 lần cho khảo sát này.<br>
+        <span style="color:#fde68a;">Nếu muốn sửa bài khảo sát hãy liên hệ nhân sự để được mở lại.</span>
+      </div>
       <div id="pvThankYouActions" style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
         <button class="btn-outline" onclick="location.reload()">Thực Hiện Lại Khảo Sát</button>
         <button id="previewBackBtn" class="btn-primary hidden" onclick="backToBuilderPreview()">↩️ Quay Lại Bảng Thiết Kế</button>
@@ -1166,6 +1244,115 @@ const CONFIG = {
   // Khóa bảo mật tùy chọn (nếu có cấu hình trong Functions)
   ADMIN_KEY: ""
 };
+
+// === ADMIN AUTH – GHI NHỚ VĨNH VIỄN TRÊN THIẾT BỊ ===
+const ADMIN_AUTH_FLAG = 'survey_admin_auth';
+const ADMIN_AUTH_USER = 'survey_admin_user';
+const ADMIN_AUTH_KEY = 'survey_admin_key';
+
+function isParticipantMode() {
+  var h = window.location.hash;
+  return h && (h.indexOf('id=') !== -1 || h.indexOf('survey=') !== -1);
+}
+function isAdminLoggedIn() {
+  return localStorage.getItem(ADMIN_AUTH_FLAG) === '1';
+}
+function getStoredAdminKey() {
+  return (localStorage.getItem(ADMIN_AUTH_KEY) || CONFIG.ADMIN_KEY || '').trim();
+}
+function showAdminLogin(msg) {
+  var overlay = document.getElementById('adminLoginOverlay');
+  var errEl = document.getElementById('loginErrorEl');
+  if (overlay) overlay.classList.remove('hidden');
+  var adminView = document.getElementById('adminView');
+  if (adminView) adminView.classList.add('hidden');
+  if (msg && errEl) { errEl.textContent = msg; errEl.classList.remove('hidden'); }
+  else if (errEl) { errEl.classList.add('hidden'); errEl.textContent=''; }
+}
+function hideAdminLogin() {
+  var overlay = document.getElementById('adminLoginOverlay');
+  if (overlay) overlay.classList.add('hidden');
+  var adminView = document.getElementById('adminView');
+  // chỉ hiện adminView nếu không ở participant mode
+  if (adminView && !isParticipantMode()) adminView.classList.remove('hidden');
+}
+async function handleAdminLogin(event) {
+  if (event) event.preventDefault();
+  var userEl = document.getElementById('loginUsername');
+  var passEl = document.getElementById('loginPassword');
+  var btn = document.getElementById('loginSubmitBtn');
+  var errEl = document.getElementById('loginErrorEl');
+  var username = userEl ? userEl.value.trim() : '';
+  var password = passEl ? passEl.value.trim() : '';
+  if (!username || !password) {
+    if (errEl) { errEl.textContent = 'Vui lòng nhập tài khoản và mật khẩu.'; errEl.classList.remove('hidden'); }
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang kiểm tra...'; }
+  try {
+    var apiUrl = buildApiUrl('/api/admin/login');
+    var res = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: username, password: password })
+    });
+    var data = await res.json().catch(function(){ return {}; });
+    if (res.ok && data.success) {
+      localStorage.setItem(ADMIN_AUTH_FLAG, '1');
+      localStorage.setItem(ADMIN_AUTH_USER, username);
+      localStorage.setItem(ADMIN_AUTH_KEY, password);
+      localStorage.setItem('survey_admin_key', password);
+      if (errEl) errEl.classList.add('hidden');
+      hideAdminLogin();
+      showToast('Đăng nhập thành công!', 'success');
+      // Nếu vừa login lần đầu, khởi tạo builder nếu chưa có dữ liệu
+      try {
+        if (!document.getElementById('builderHeader').value && AppState.currentSurvey.questions.length === 0) {
+          loadBootcampPreset();
+          setTimeout(function(){ saveSurveyAndPublish(true); }, 200);
+        }
+      } catch(e){}
+      try { refreshDataList(); } catch(e){}
+    } else {
+      var msg = (data && data.error) ? data.error : 'Sai tài khoản hoặc mật khẩu';
+      if (errEl) { errEl.textContent = msg; errEl.classList.remove('hidden'); }
+    }
+  } catch (e) {
+    // Fallback cho dev không có backend (cho phép admin/admin123 cục bộ)
+    if (username === 'admin' && password === 'admin123') {
+      localStorage.setItem(ADMIN_AUTH_FLAG, '1');
+      localStorage.setItem(ADMIN_AUTH_USER, username);
+      localStorage.setItem(ADMIN_AUTH_KEY, password);
+      localStorage.setItem('survey_admin_key', password);
+      hideAdminLogin();
+      showToast('Đăng nhập thành công (offline mode)!', 'success');
+      try {
+        if (!document.getElementById('builderHeader').value && AppState.currentSurvey.questions.length === 0) {
+          loadBootcampPreset();
+          setTimeout(function(){ saveSurveyAndPublish(true); }, 200);
+        }
+      } catch(e){}
+    } else {
+      if (errEl) { errEl.textContent = 'Không kết nối được server: ' + e.message; errEl.classList.remove('hidden'); }
+    }
+  }
+  if (btn) { btn.disabled = false; btn.textContent = 'Đăng Nhập'; }
+}
+function checkAdminAuthOnLoad() {
+  if (isParticipantMode()) {
+    // Participant không cần login, ẩn overlay nếu có
+    var overlay = document.getElementById('adminLoginOverlay');
+    if (overlay) overlay.classList.add('hidden');
+    return true;
+  }
+  if (isAdminLoggedIn()) {
+    hideAdminLogin();
+    return true;
+  } else {
+    showAdminLogin();
+    return false;
+  }
+}
 
 
 /* =========================================================================
@@ -1782,16 +1969,17 @@ const ExcelExporter = {
     xml += ' <Column ss:Width="100"/>\n';
     xml += ' <Column ss:Width="160"/>\n';
     xml += ' <Column ss:Width="150"/>\n';
+    xml += ' <Column ss:Width="120"/>\n';
     for (var i = 0; i < finalQuestions.length; i++) {
       xml += ' <Column ss:Width="220"/>\n';
     }
 
     xml += ' <Row ss:Height="30">\n' +
-      '  <Cell ss:MergeAcross="' + (4 + finalQuestions.length) + '" ss:StyleID="TitleStyle"><Data ss:Type="String">BÁO CÁO KẾT QUẢ KHẢO SÁT: ' + escXml(surveyTitle) + '</Data></Cell>\n' +
+      '  <Cell ss:MergeAcross="' + (5 + finalQuestions.length) + '" ss:StyleID="TitleStyle"><Data ss:Type="String">BÁO CÁO KẾT QUẢ KHẢO SÁT: ' + escXml(surveyTitle) + '</Data></Cell>\n' +
       ' </Row>\n';
 
     xml += ' <Row ss:Height="20">\n' +
-      '  <Cell ss:MergeAcross="' + (4 + finalQuestions.length) + '" ss:StyleID="MetaStyle"><Data ss:Type="String">Ngày xuất báo cáo: ' + new Date().toLocaleString("vi-VN") + ' | Tổng số lượt nộp: ' + responses.length + '</Data></Cell>\n' +
+      '  <Cell ss:MergeAcross="' + (5 + finalQuestions.length) + '" ss:StyleID="MetaStyle"><Data ss:Type="String">Ngày xuất báo cáo: ' + new Date().toLocaleString("vi-VN") + ' | Tổng số lượt nộp: ' + responses.length + '</Data></Cell>\n' +
       ' </Row>\n';
     xml += ' <Row ss:Height="10"></Row>\n';
 
@@ -1800,7 +1988,8 @@ const ExcelExporter = {
       '  <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Thời Gian Nộp</Data></Cell>\n' +
       '  <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">MSNV</Data></Cell>\n' +
       '  <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Họ và Tên</Data></Cell>\n' +
-      '  <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Bộ Phận</Data></Cell>\n';
+      '  <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Bộ Phận</Data></Cell>\n' +
+      '  <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">IP</Data></Cell>\n';
 
     finalQuestions.forEach(function(q, idx) {
       xml += '  <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Câu ' + (idx + 1) + ': ' + escXml(q.title) + '</Data></Cell>\n';
@@ -1815,6 +2004,7 @@ const ExcelExporter = {
       var msnv = (r.employee_msnv || r.employee?.msnv || "").toString();
       var name = (r.employee_name || r.employee?.name || "").toString();
       var dept = (r.employee_dept || r.employee?.department || "").toString();
+      var ip = (r.client_ip || r.clientIp || "").toString();
       
       var ansMap = {};
       var answersList = r.answers;
@@ -1839,7 +2029,8 @@ const ExcelExporter = {
         '  <Cell ss:StyleID="CenterDataStyle"><Data ss:Type="String">' + escXml(dateStr) + '</Data></Cell>\n' +
         '  <Cell ss:StyleID="CenterDataStyle"><Data ss:Type="String">' + escXml(msnv) + '</Data></Cell>\n' +
         '  <Cell ss:StyleID="DataStyle"><Data ss:Type="String">' + escXml(name) + '</Data></Cell>\n' +
-        '  <Cell ss:StyleID="DataStyle"><Data ss:Type="String">' + escXml(dept) + '</Data></Cell>\n';
+        '  <Cell ss:StyleID="DataStyle"><Data ss:Type="String">' + escXml(dept) + '</Data></Cell>\n' +
+        '  <Cell ss:StyleID="CenterDataStyle"><Data ss:Type="String">' + escXml(ip) + '</Data></Cell>\n';
 
       finalQuestions.forEach(function(q, qIdx) {
         var ans = "";
@@ -2022,6 +2213,75 @@ function buildApiUrl(path) {
   // base = "" => same-origin => "/api/..."
   // base = "https://xxx.pages.dev" => "https://xxx.pages.dev/api/..."
   return (base + path);
+}
+
+function getAdminKeyForApi() {
+  return getStoredAdminKey() || getBackendSettings().adminKey || '';
+}
+
+// === LOCK CHECK – server là source of truth, localStorage là UX cache ===
+async function checkSubmissionLock(surveyId, msnv) {
+  try {
+    var params = 'survey_id=' + encodeURIComponent(surveyId);
+    if (msnv) params += '&msnv=' + encodeURIComponent(msnv);
+    var res = await fetch(buildApiUrl('/api/responses/check?' + params));
+    if (!res.ok) return { submitted: false };
+    var data = await res.json().catch(function(){ return { submitted:false }; });
+    return data;
+  } catch(e) {
+    console.warn('checkSubmissionLock failed, fallback localStorage', e);
+    // fallback localStorage: nếu đã đánh dấu local thì coi như submitted
+    var localFlag = localStorage.getItem('survey_done_' + surveyId);
+    if (localFlag) return { submitted: true, reason: 'local', response: null };
+    return { submitted: false };
+  }
+}
+
+function showLockedThankYou(survey, lockData) {
+  // lockData: { submitted:true, response:{employee_name, employee_msnv, submitted_at...}, reason }
+  document.getElementById('adminView').classList.add('hidden');
+  document.getElementById('participantView').classList.remove('hidden');
+  document.getElementById('pvTitle').textContent = survey.title || 'Khảo Sát Ý Kiến Nhân Viên';
+  document.getElementById('pvDesc').textContent = survey.description || '';
+  document.getElementById('pvStepIntro').classList.add('hidden');
+  document.getElementById('pvStepQuestions').classList.add('hidden');
+  var thankEl = document.getElementById('pvStepThankYou');
+  thankEl.classList.remove('hidden');
+  // cập nhật nút: ẩn nút làm lại với participant, chỉ hiện khi preview
+  updateThankYouActions();
+  // cập nhật nội dung cảm ơn: giữ nguyên nhưng đảm bảo có dòng liên hệ nhân sự
+  // lưu survey active để preview back hoạt động
+  window.__activeSurvey = survey;
+  window.__lockedResponse = lockData && lockData.response ? lockData.response : null;
+  // đồng bộ localStorage: đánh dấu đã nộp để lần sau không cần gọi server cũng chặn nhanh
+  try { localStorage.setItem('survey_done_' + survey.id, '1'); } catch(e){}
+  try { if (lockData && lockData.response) localStorage.setItem('survey_done_data_' + survey.id, JSON.stringify(lockData.response)); } catch(e){}
+  // scroll top
+  window.scrollTo({ top:0, behavior:'smooth' });
+}
+
+function updateThankYouActions() {
+  var container = document.getElementById('pvThankYouActions');
+  if (!container) return;
+  // Xóa nút cũ "Thực Hiện Lại" nếu không phải preview
+  var isPreview = !!window.__isPreviewMode;
+  // Tìm nút reload
+  var reloadBtn = container.querySelector('button[onclick="location.reload()"]');
+  if (reloadBtn) {
+    if (isPreview) {
+      reloadBtn.classList.remove('hidden');
+      reloadBtn.style.display = '';
+    } else {
+      reloadBtn.classList.add('hidden');
+      reloadBtn.style.display = 'none';
+    }
+  }
+  // Đảm bảo nút quay lại builder chỉ hiện khi preview
+  var backBtn = document.getElementById('previewBackBtn');
+  if (backBtn) {
+    if (isPreview) backBtn.classList.remove('hidden');
+    else backBtn.classList.add('hidden');
+  }
 }
 
 function showToast(msg, type) {
@@ -2265,13 +2525,12 @@ async function saveSurveyAndPublish(isSilent) {
   var neonSynced = false;
   var syncErrorMsg = "";
   try {
-    var backend = getBackendSettings();
     var apiUrl = buildApiUrl("/api/surveys");
     var syncRes = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-admin-key": backend.adminKey
+        "x-admin-key": getAdminKeyForApi()
       },
       body: JSON.stringify(AppState.currentSurvey)
     });
@@ -2417,6 +2676,8 @@ function startParticipantMode(survey) {
   }
 
   window.__activeSurvey = survey;
+  // ẩn nút làm lại nếu không preview
+  setTimeout(updateThankYouActions, 0);
 }
 
 function toggleDeptCustomInput(val) {
@@ -2429,7 +2690,7 @@ function toggleDeptCustomInput(val) {
   }
 }
 
-function proceedToQuestions() {
+async function proceedToQuestions() {
   var msnv = document.getElementById("pvMsnv").value.trim();
   var name = document.getElementById("pvFullName").value.trim();
   var deptSelect = document.getElementById("pvDeptSelect").value;
@@ -2449,6 +2710,23 @@ function proceedToQuestions() {
     showToast("Vui lòng chọn hoặc nhập Bộ Phận / Phòng Ban của bạn.", "error");
     document.getElementById("pvDeptSelect").focus();
     return;
+  }
+
+  // Nếu là preview thì bỏ qua check duplicate
+  if (!window.__isPreviewMode) {
+    var survey = window.__activeSurvey || AppState.currentSurvey;
+    var surveyId = survey ? survey.id : '';
+    if (surveyId) {
+      showToast('Đang kiểm tra MSNV...', 'info');
+      var lock = await checkSubmissionLock(surveyId, msnv);
+      if (lock && lock.submitted) {
+        // Đã có người dùng MSNV này hoặc IP này nộp rồi – chặn
+        showToast('MSNV hoặc thiết bị này đã nộp khảo sát rồi. Mỗi MSNV/IP chỉ được 1 lần.', 'error');
+        // Hiển thị luôn màn thank you lock để đúng yêu cầu "thoát ra vào lại thấy đã nộp thành công"
+        showLockedThankYou(survey, lock);
+        return;
+      }
+    }
   }
 
   AppState.participantEmployee = {
@@ -2607,6 +2885,17 @@ async function submitSurveyResponse() {
   }
 
   var submitBtn = document.getElementById("pvSubmitBtn");
+  // Preview mode: không lưu DB, chỉ hiện thank you để admin test, không khóa IP
+  if (window.__isPreviewMode) {
+    showToast("Xem trước – không lưu dữ liệu thật!", "info");
+    document.getElementById("pvStepQuestions").classList.add("hidden");
+    document.getElementById("pvStepThankYou").classList.remove("hidden");
+    updateThankYouActions();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    submitBtn.disabled = false;
+    submitBtn.textContent = "GỬI BÀI KHẢO SÁT (SUBMIT)";
+    return;
+  }
   submitBtn.disabled = true;
   submitBtn.textContent = "⏳ ĐANG GỬI DỮ LIỆU...";
 
@@ -2625,9 +2914,10 @@ async function submitSurveyResponse() {
     await DB.saveResponse(payload);
   } catch(e) { console.warn("IndexedDB save failed:", e); }
 
-  // Ghi vào Neon qua Pages Functions (pages.dev)
+  // Ghi vào Neon qua Pages Functions (pages.dev) – có chặn trùng IP+MSNV server side
   var neonSynced = false;
   var neonErr = "";
+  var isDuplicate = false;
   try {
     var apiUrl = buildApiUrl("/api/responses");
     var res = await fetch(apiUrl, {
@@ -2637,6 +2927,20 @@ async function submitSurveyResponse() {
     });
     if (res.ok) {
       neonSynced = true;
+    } else if (res.status === 409) {
+      var dupData = await res.json().catch(function(){ return {}; });
+      neonErr = (dupData && dupData.error) ? dupData.error : 'Trùng IP/MSNV';
+      isDuplicate = true;
+      showToast(neonErr, 'error');
+      // vẫn hiện thank you lock như đã nộp thành công (yêu cầu: thoát ra vào lại thấy đã nộp)
+      try { localStorage.setItem('survey_done_' + survey.id, '1'); } catch(e){}
+      document.getElementById("pvStepQuestions").classList.add("hidden");
+      document.getElementById("pvStepThankYou").classList.remove("hidden");
+      updateThankYouActions();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      submitBtn.disabled = false;
+      submitBtn.textContent = "GỬI BÀI KHẢO SÁT (SUBMIT)";
+      return;
     } else {
       var errData = await res.json().catch(function(){ return null; });
       neonErr = (errData && errData.error) ? errData.error : (await res.text().catch(function(){ return "HTTP " + res.status; }));
@@ -2649,12 +2953,20 @@ async function submitSurveyResponse() {
 
   if (neonSynced) {
     showToast("Gửi bài khảo sát thành công!", "success");
+    // Đánh dấu đã nộp: localStorage + lock vĩnh viễn đến khi admin xóa
+    try { localStorage.setItem('survey_done_' + survey.id, '1'); } catch(e){}
+    try { localStorage.setItem('survey_done_data_' + survey.id, JSON.stringify(payload)); } catch(e){}
+  } else if (isDuplicate) {
+    // đã xử lý ở trên
   } else {
-    showToast("Đã lưu bài khảo sát!", "info");
+    // Lưu cục bộ fallback nhưng vẫn chặn lần sau bằng localStorage để tránh spam khi offline
+    try { localStorage.setItem('survey_done_' + survey.id, '1'); } catch(e){}
+    showToast("Đã lưu bài khảo sát cục bộ (offline)! Sẽ đồng bộ khi có mạng.", "info");
   }
 
   document.getElementById("pvStepQuestions").classList.add("hidden");
   document.getElementById("pvStepThankYou").classList.remove("hidden");
+  updateThankYouActions();
   window.scrollTo({ top: 0, behavior: 'smooth' });
   
   submitBtn.disabled = false;
@@ -2738,7 +3050,7 @@ function updateDashboardStats(rows) {
 function renderResponsesTable(rows) {
   var tbody = document.getElementById("responsesTableBody");
   if (!rows || rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#9ca3af;">Chưa có phản hồi nào trong hệ thống.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#9ca3af;">Chưa có phản hồi nào trong hệ thống.</td></tr>';
     return;
   }
 
@@ -2751,6 +3063,7 @@ function renderResponsesTable(rows) {
     if (time) {
       try { time = new Date(time).toLocaleString('vi-VN'); } catch(e){}
     }
+    var ip = r.client_ip || r.clientIp || '-';
 
     var answersList = r.answers;
     if (typeof answersList === "string") {
@@ -2768,9 +3081,11 @@ function renderResponsesTable(rows) {
     html += '  <td><span class="badge badge-purple">' + escHtml(msnv) + '</span></td>';
     html += '  <td style="font-weight:600;color:#111827;">' + escHtml(name) + '</td>';
     html += '  <td><span class="badge badge-blue">' + escHtml(dept) + '</span></td>';
-    html += '  <td style="font-size:12px;color:#4b5563;max-width:320px;">' + (previewAns || 'Đã trả lời ' + answersCount + ' câu hỏi') + '</td>';
-    html += '  <td style="text-align:right;">';
-    html += '    <button class="btn-outline btn-sm" style="color:#4f46e5;border-color:#c7d2fe;" onclick="viewResponseDetail(' + idx + ')">👁️ Chi tiết</button>';
+    html += '  <td style="font-size:12px;color:#6b7280;white-space:nowrap;">' + escHtml(ip) + '</td>';
+    html += '  <td style="font-size:12px;color:#4b5563;max-width:280px;">' + (previewAns || 'Đã trả lời ' + answersCount + ' câu hỏi') + '</td>';
+    html += '  <td style="text-align:right;white-space:nowrap;">';
+    html += '    <button class="btn-outline btn-sm" style="color:#4f46e5;border-color:#c7d2fe;margin-right:4px;" onclick="viewResponseDetail(' + idx + ')">👁️ Chi tiết</button>';
+    html += '    <button class="btn-danger btn-sm" style="font-size:12px;" onclick="allowRetake(' + r.id + ')" title="Xóa bài này và cho phép thiết bị/IP đó làm lại">🔓 Cho phép làm lại</button>';
     html += '  </td>';
     html += '</tr>';
   });
@@ -2786,8 +3101,9 @@ function filterResponsesTable() {
     var msnv = (r.employee_msnv || r.employee?.msnv || '').toLowerCase();
     var name = (r.employee_name || r.employee?.name || '').toLowerCase();
     var rDept = (r.employee_dept || r.employee?.department || '');
+    var ip = (r.client_ip || r.clientIp || '').toLowerCase();
 
-    var matchKeyword = !keyword || msnv.includes(keyword) || name.includes(keyword) || rDept.toLowerCase().includes(keyword);
+    var matchKeyword = !keyword || msnv.includes(keyword) || name.includes(keyword) || rDept.toLowerCase().includes(keyword) || ip.includes(keyword);
     var matchDept = !dept || rDept === dept;
     return matchKeyword && matchDept;
   });
@@ -2802,6 +3118,7 @@ function viewResponseDetail(index) {
   var msnv = record.employee_msnv || record.employee?.msnv || '-';
   var name = record.employee_name || record.employee?.name || '-';
   var dept = record.employee_dept || record.employee?.department || '-';
+  var ip = record.client_ip || record.clientIp || '-';
   var time = record.submitted_at || record.submittedAt || '';
   if (time) {
     try { time = new Date(time).toLocaleString('vi-VN'); } catch(e){}
@@ -2813,6 +3130,7 @@ function viewResponseDetail(index) {
   html += '<div>👤 <b>Họ và Tên:</b> ' + escHtml(name) + '</div>';
   html += '<div>🆔 <b>Mã Số Nhân Viên:</b> ' + escHtml(msnv) + '</div>';
   html += '<div>🏢 <b>Bộ Phận:</b> ' + escHtml(dept) + '</div>';
+  html += '<div>🌐 <b>IP:</b> ' + escHtml(ip) + '</div>';
   html += '<div>🕒 <b>Thời Gian Nộp:</b> ' + escHtml(time) + '</div>';
   html += '</div>';
 
@@ -2886,12 +3204,11 @@ async function executePurgeData() {
 
   // Xóa trên Neon qua Pages Functions (pages.dev)
   try {
-    var backend = getBackendSettings();
     var apiUrl = buildApiUrl("/api/responses");
     await fetch(apiUrl, {
       method: "DELETE",
       headers: {
-        "x-admin-key": backend.adminKey
+        "x-admin-key": getAdminKeyForApi()
       }
     });
   } catch(err) {
@@ -2909,6 +3226,30 @@ async function executePurgeData() {
   closePurgeModal();
 
   showToast("Đã xóa toàn bộ dữ liệu trên hệ thống thành công! Dung lượng đã được giải phóng.", "success");
+}
+
+async function allowRetake(responseId) {
+  if (!responseId) return;
+  var rec = (AppState.cachedResponses || []).find(function(r){ return String(r.id) === String(responseId); });
+  var info = rec ? (rec.employee_name + ' (' + rec.employee_msnv + ')') : ('ID ' + responseId);
+  if (!confirm('Xác nhận cho phép làm lại cho ' + info + '?\nThao tác này sẽ XÓA bài nộp hiện tại và mở khóa IP/MSNV để người đó có thể quét QR/link làm lại.')) return;
+  try {
+    var apiUrl = buildApiUrl('/api/responses?id=' + encodeURIComponent(responseId));
+    var res = await fetch(apiUrl, {
+      method: 'DELETE',
+      headers: { 'x-admin-key': getAdminKeyForApi() }
+    });
+    var data = await res.json().catch(function(){ return {}; });
+    if (!res.ok) {
+      var msg = data && data.error ? data.error : ('HTTP ' + res.status);
+      throw new Error(msg);
+    }
+    showToast('Đã xóa bài của ' + info + ' và mở khóa. Người đó có thể làm lại ngay.', 'success');
+    // Refresh list ngay
+    await refreshDataList();
+  } catch(e) {
+    showToast('Cho phép làm lại thất bại: ' + e.message, 'error');
+  }
 }
 
 /* =========================================================================
@@ -3056,7 +3397,7 @@ async function confirmExecuteDeleteSurvey() {
     // Xóa trên Neon qua Pages Functions
     try {
       var apiUrl = buildApiUrl("/api/surveys?id=" + encodeURIComponent(id));
-      await fetch(apiUrl, { method: "DELETE", headers: { "x-admin-key": getBackendSettings().adminKey } });
+      await fetch(apiUrl, { method: "DELETE", headers: { "x-admin-key": getAdminKeyForApi() } });
     } catch(e) { console.warn("Delete on Neon failed (may be offline):", e); }
     // Nếu đang mở chính khảo sát này thì tạo mới
     if (AppState.currentSurvey && AppState.currentSurvey.id === id) {
@@ -3083,8 +3424,45 @@ function createNewSurvey() {
 }
 
 /* =========================================================================
-   9. BOOTSTRAP
+   9. BOOTSTRAP + LOCK CHECK (IP+MSNV)
    ========================================================================= */
+async function handleSurveyLoadWithLock(survey) {
+  // Preview mode bỏ qua lock
+  if (window.__isPreviewMode) {
+    startParticipantMode(survey);
+    return;
+  }
+  // Kiểm tra localStorage trước cho nhanh, nhưng vẫn xác thực server
+  var surveyId = survey.id;
+  // Ưu tiên check server (source of truth)
+  try {
+    var lock = await checkSubmissionLock(surveyId);
+    if (lock && lock.submitted) {
+      // Đã nộp – hiện màn thank you lock, đồng bộ localStorage
+      showLockedThankYou(survey, lock);
+      return;
+    } else {
+      // Chưa nộp – nếu localStorage còn sót flag cũ (do admin đã xóa) thì xóa đi
+      try {
+        if (localStorage.getItem('survey_done_' + surveyId)) {
+          // server nói chưa nộp => admin đã mở khóa, xóa flag để cho làm lại
+          localStorage.removeItem('survey_done_' + surveyId);
+          localStorage.removeItem('survey_done_data_' + surveyId);
+        }
+      } catch(e){}
+    }
+  } catch(e) {
+    // fallback localStorage only
+    try {
+      if (localStorage.getItem('survey_done_' + surveyId)) {
+        showLockedThankYou(survey, { submitted:true, response: null });
+        return;
+      }
+    } catch(e2){}
+  }
+  startParticipantMode(survey);
+}
+
 (function initApp() {
   var hash = window.location.hash;
   if (hash.startsWith("#survey=")) {
@@ -3092,46 +3470,49 @@ function createNewSurvey() {
       var base64 = hash.slice(8);
       var jsonStr = decodeURIComponent(escape(atob(base64)));
       var survey = JSON.parse(jsonStr);
-      startParticipantMode(survey);
+      handleSurveyLoadWithLock(survey);
       return;
     } catch(err) {
       console.error("Error parsing survey hash:", err);
     }
   } else if (hash.startsWith("#id=")) {
     var id = decodeURIComponent(hash.slice(4));
-    // Load survey by ID từ IndexedDB hoặc Neon (pages.dev)
+    // Load survey by ID từ IndexedDB hoặc Neon (pages.dev) – có check lock IP/MSNV
     (async function loadById() {
       try {
+        var survey = null;
         // 1. Thử IndexedDB trước (offline)
         try {
           var list = await DB.getAllSurveys();
           var found = list.find(function(s){ return s.id === id; });
           if (found) {
-            // Đảm bảo questions là mảng
             if (typeof found.questions === "string") {
               try { found.questions = JSON.parse(found.questions); } catch(e){}
             }
-            startParticipantMode(found);
-            return;
+            survey = found;
           }
         } catch(e){ console.warn("IndexedDB lookup failed:", e); }
 
-        // 2. Thử fetch từ Cloudflare Pages Functions (Neon)
-        var apiUrl = buildApiUrl("/api/surveys?id=" + encodeURIComponent(id));
-        var res = await fetch(apiUrl);
-        if (res.ok) {
-          var survey = await res.json();
-          if (survey) {
-            if (typeof survey.questions === "string") {
-              try { survey.questions = JSON.parse(survey.questions); } catch(e){}
+        // 2. Nếu chưa có, thử fetch từ Cloudflare Pages Functions (Neon)
+        if (!survey) {
+          var apiUrl = buildApiUrl("/api/surveys?id=" + encodeURIComponent(id));
+          var res = await fetch(apiUrl);
+          if (res.ok) {
+            var fetched = await res.json();
+            if (fetched) {
+              if (typeof fetched.questions === "string") {
+                try { fetched.questions = JSON.parse(fetched.questions); } catch(e){}
+              }
+              if (!fetched.id) fetched.id = id;
+              survey = fetched;
             }
-            // Đảm bảo có id, title
-            if (!survey.id) survey.id = id;
-            startParticipantMode(survey);
-            return;
+          } else {
+            throw new Error("Survey not found on server (HTTP " + (res ? res.status : "unknown") + ")");
           }
         }
-        throw new Error("Survey not found on server (HTTP " + (res ? res.status : "unknown") + ")");
+
+        if (!survey) throw new Error("Survey not found");
+        await handleSurveyLoadWithLock(survey);
       } catch(err) {
         console.error("Load survey by ID failed:", err);
         // Hiển thị thông báo Link Lỗi Rồi (người dùng tự đóng tab, tuyệt đối không có nút quay về admin)
@@ -3141,6 +3522,9 @@ function createNewSurvey() {
     return;
   }
 
+  // ADMIN MODE: yêu cầu đăng nhập
+  var authed = checkAdminAuthOnLoad();
+  if (!authed) return;
   loadBootcampPreset();
   setTimeout(function(){
     saveSurveyAndPublish(true);

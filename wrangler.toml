@@ -4,3 +4,5 @@ pages_build_output_dir = "."
 
 [vars]
 # DATABASE_URL duoc inject tu Variables and Secrets tren Cloudflare Pages khi deploy
+ADMIN_USER = "admin"
+ADMIN_PASS = "admin123"
