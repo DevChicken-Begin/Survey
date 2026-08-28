@@ -1881,189 +1881,287 @@ const ExcelExporter = {
       showToast("Chưa có dữ liệu phản hồi để xuất Excel.", "error");
       return;
     }
-
-    // 1. Thu thập và chuẩn hóa toàn bộ các câu hỏi từ cấu hình và các bài nộp thực tế
+    // 1. Thu thập câu hỏi
     var finalQuestions = [];
     var seenKeys = new Set();
-
     (questions || []).forEach(function(q, idx) {
       var id = q.id || ("q_" + idx);
       var title = (q.title || ("Câu hỏi " + (idx + 1))).trim();
       if (!seenKeys.has(id) && !seenKeys.has(title)) {
         finalQuestions.push({ id: id, title: title });
-        seenKeys.add(id);
-        seenKeys.add(title);
+        seenKeys.add(id); seenKeys.add(title);
       }
     });
-
     (responses || []).forEach(function(r) {
       var ansList = r.answers;
-      if (typeof ansList === "string") {
-        try { ansList = JSON.parse(ansList); } catch(e){ ansList = []; }
-      }
+      if (typeof ansList === "string") { try { ansList = JSON.parse(ansList); } catch(e){ ansList = []; } }
       (ansList || []).forEach(function(a, aIdx) {
         var aId = a.questionId || a.id || ("q_" + aIdx);
         var aTitle = (a.question || a.title || ("Câu hỏi " + (aIdx + 1))).trim();
         if (!seenKeys.has(aId) && !seenKeys.has(aTitle)) {
           finalQuestions.push({ id: aId, title: aTitle });
-          seenKeys.add(aId);
-          seenKeys.add(aTitle);
+          seenKeys.add(aId); seenKeys.add(aTitle);
         }
       });
     });
+    if (finalQuestions.length === 0) finalQuestions = [{ id: "q1", title: "Nội dung phản hồi" }];
 
-    if (finalQuestions.length === 0) {
-      finalQuestions = [{ id: "q1", title: "Nội dung phản hồi" }];
-    }
-
-    var xml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
-      '<?mso-application progid="Excel.Sheet"?>\n' +
-      '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"\n' +
-      ' xmlns:o="urn:schemas-microsoft-com:office:office"\n' +
-      ' xmlns:x="urn:schemas-microsoft-com:office:excel"\n' +
-      ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"\n' +
-      ' xmlns:html="http://www.w3.org/TR/REC-html40">\n' +
-      '<Styles>\n' +
-      ' <Style ss:ID="Default" ss:Name="Normal">\n' +
-      '  <Alignment ss:Vertical="Center"/>\n' +
-      '  <Font ss:FontName="Arial" ss:Size="11" ss:Color="#000000"/>\n' +
-      ' </Style>\n' +
-      ' <Style ss:ID="TitleStyle">\n' +
-      '  <Font ss:FontName="Arial" ss:Size="16" ss:Bold="1" ss:Color="#1e1b4b"/>\n' +
-      '  <Alignment ss:Vertical="Center"/>\n' +
-      ' </Style>\n' +
-      ' <Style ss:ID="MetaStyle">\n' +
-      '  <Font ss:FontName="Arial" ss:Size="10" ss:Italic="1" ss:Color="#4b5563"/>\n' +
-      ' </Style>\n' +
-      ' <Style ss:ID="HeaderStyle">\n' +
-      '  <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>\n' +
-      '  <Borders>\n' +
-      '   <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#9ca3af"/>\n' +
-      '   <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#9ca3af"/>\n' +
-      '   <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#9ca3af"/>\n' +
-      '   <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#9ca3af"/>\n' +
-      '  </Borders>\n' +
-      '  <Font ss:FontName="Arial" ss:Size="11" ss:Bold="1" ss:Color="#ffffff"/>\n' +
-      '  <Interior ss:Color="#4f46e5" ss:Pattern="Solid"/>\n' +
-      ' </Style>\n' +
-      ' <Style ss:ID="DataStyle">\n' +
-      '  <Borders>\n' +
-      '   <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#e5e7eb"/>\n' +
-      '   <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#e5e7eb"/>\n' +
-      '   <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#e5e7eb"/>\n' +
-      '   <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#e5e7eb"/>\n' +
-      '  </Borders>\n' +
-      '  <Alignment ss:Vertical="Center"/>\n' +
-      ' </Style>\n' +
-      ' <Style ss:ID="CenterDataStyle">\n' +
-      '  <Borders>\n' +
-      '   <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#e5e7eb"/>\n' +
-      '   <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#e5e7eb"/>\n' +
-      '   <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#e5e7eb"/>\n' +
-      '   <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#e5e7eb"/>\n' +
-      '  </Borders>\n' +
-      '  <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>\n' +
-      ' </Style>\n' +
-      '</Styles>\n' +
-      '<Worksheet ss:Name="KetQuaKhaoSat">\n' +
-      '<Table>\n';
-
-    xml += ' <Column ss:Width="45"/>\n';
-    xml += ' <Column ss:Width="140"/>\n';
-    xml += ' <Column ss:Width="100"/>\n';
-    xml += ' <Column ss:Width="160"/>\n';
-    xml += ' <Column ss:Width="150"/>\n';
-    xml += ' <Column ss:Width="120"/>\n';
-    for (var i = 0; i < finalQuestions.length; i++) {
-      xml += ' <Column ss:Width="220"/>\n';
-    }
-
-    xml += ' <Row ss:Height="30">\n' +
-      '  <Cell ss:MergeAcross="' + (5 + finalQuestions.length) + '" ss:StyleID="TitleStyle"><Data ss:Type="String">BÁO CÁO KẾT QUẢ KHẢO SÁT: ' + escXml(surveyTitle) + '</Data></Cell>\n' +
-      ' </Row>\n';
-
-    xml += ' <Row ss:Height="20">\n' +
-      '  <Cell ss:MergeAcross="' + (5 + finalQuestions.length) + '" ss:StyleID="MetaStyle"><Data ss:Type="String">Ngày xuất báo cáo: ' + new Date().toLocaleString("vi-VN") + ' | Tổng số lượt nộp: ' + responses.length + '</Data></Cell>\n' +
-      ' </Row>\n';
-    xml += ' <Row ss:Height="10"></Row>\n';
-
-    xml += ' <Row ss:Height="26">\n' +
-      '  <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">STT</Data></Cell>\n' +
-      '  <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Thời Gian Nộp</Data></Cell>\n' +
-      '  <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">MSNV</Data></Cell>\n' +
-      '  <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Họ và Tên</Data></Cell>\n' +
-      '  <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Bộ Phận</Data></Cell>\n' +
-      '  <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">IP</Data></Cell>\n';
-
-    finalQuestions.forEach(function(q, idx) {
-      xml += '  <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Câu ' + (idx + 1) + ': ' + escXml(q.title) + '</Data></Cell>\n';
-    });
-    xml += ' </Row>\n';
-
-    responses.forEach(function(r, rIdx) {
-      var dateStr = r.submitted_at || r.submittedAt || "";
-      if (dateStr) {
-        try { dateStr = new Date(dateStr).toLocaleString("vi-VN"); } catch(e){}
+    // Helper
+    function colToLetter(col) {
+      var letter = "";
+      var c = col;
+      while (c >= 0) {
+        letter = String.fromCharCode((c % 26) + 65) + letter;
+        c = Math.floor(c / 26) - 1;
       }
+      return letter;
+    }
+    function escXmlAttr(s) { return escXml(s); }
+
+    // Build header
+    var headers = ["STT", "Thời Gian Nộp", "MSNV", "Họ và Tên", "Bộ Phận", "IP"];
+    finalQuestions.forEach(function(q, idx){ headers.push("Câu " + (idx+1) + ": " + q.title); });
+
+    // Col widths
+    var colWidths = [6, 20, 14, 20, 18, 14];
+    finalQuestions.forEach(function(){ colWidths.push(30); });
+
+    // Build rows for sheetData (array of arrays of cell objects)
+    var rows = [];
+    // Row 1: Title
+    rows.push([{v: "BÁO CÁO KẾT QUẢ KHẢO SÁT: " + surveyTitle, s: 1, colspan: headers.length}]);
+    // Row 2: Meta
+    rows.push([{v: "Ngày xuất: " + new Date().toLocaleString("vi-VN") + " | Tổng số: " + responses.length, s: 0, colspan: headers.length}]);
+    // Row 3: empty
+    rows.push([]);
+    // Row 4: Header
+    rows.push(headers.map(function(h){ return {v: h, s: 1}; }));
+    // Data rows
+    responses.forEach(function(r, rIdx){
+      var dateStr = r.submitted_at || r.submittedAt || "";
+      if (dateStr) { try { dateStr = new Date(dateStr).toLocaleString("vi-VN"); } catch(e){} }
       var msnv = (r.employee_msnv || r.employee?.msnv || "").toString();
       var name = (r.employee_name || r.employee?.name || "").toString();
       var dept = (r.employee_dept || r.employee?.department || "").toString();
       var ip = (r.client_ip || r.clientIp || "").toString();
-      
       var ansMap = {};
       var answersList = r.answers;
-      if (typeof answersList === "string") {
-        try { answersList = JSON.parse(answersList); } catch(e){ answersList = []; }
-      }
-      (answersList || []).forEach(function(a, aIdx) {
+      if (typeof answersList === "string") { try { answersList = JSON.parse(answersList); } catch(e){ answersList = []; } }
+      (answersList || []).forEach(function(a, aIdx){
         var qid = a.questionId !== undefined ? a.questionId : a.id;
         var qtext = (a.question || a.title || "").trim();
         var val = a.value;
         if (Array.isArray(val)) val = val.join("; ");
-        else if (val === null || val === undefined) val = "";
-        else val = String(val);
-
-        if (qid !== undefined) ansMap[String(qid)] = val;
-        if (qtext) ansMap[qtext] = val;
-        ansMap["idx_" + aIdx] = val;
+        else if (val===null||val===undefined) val="";
+        else val=String(val);
+        if (qid!==undefined) ansMap[String(qid)]=val;
+        if (qtext) ansMap[qtext]=val;
+        ansMap["idx_"+aIdx]=val;
       });
-
-      xml += ' <Row ss:Height="22">\n' +
-        '  <Cell ss:StyleID="CenterDataStyle"><Data ss:Type="Number">' + (rIdx + 1) + '</Data></Cell>\n' +
-        '  <Cell ss:StyleID="CenterDataStyle"><Data ss:Type="String">' + escXml(dateStr) + '</Data></Cell>\n' +
-        '  <Cell ss:StyleID="CenterDataStyle"><Data ss:Type="String">' + escXml(msnv) + '</Data></Cell>\n' +
-        '  <Cell ss:StyleID="DataStyle"><Data ss:Type="String">' + escXml(name) + '</Data></Cell>\n' +
-        '  <Cell ss:StyleID="DataStyle"><Data ss:Type="String">' + escXml(dept) + '</Data></Cell>\n' +
-        '  <Cell ss:StyleID="CenterDataStyle"><Data ss:Type="String">' + escXml(ip) + '</Data></Cell>\n';
-
-      finalQuestions.forEach(function(q, qIdx) {
-        var ans = "";
-        if (q.id && ansMap[String(q.id)] !== undefined) {
-          ans = ansMap[String(q.id)];
-        } else if (q.title && ansMap[String(q.title).trim()] !== undefined) {
-          ans = ansMap[String(q.title).trim()];
-        } else if (ansMap["idx_" + qIdx] !== undefined) {
-          ans = ansMap["idx_" + qIdx];
-        }
-        xml += '  <Cell ss:StyleID="DataStyle"><Data ss:Type="String">' + escXml(ans) + '</Data></Cell>\n';
+      var row = [];
+      row.push({v: String(rIdx+1), s: 2, isNumber: true});
+      row.push({v: dateStr, s: 2});
+      row.push({v: msnv, s: 2});
+      row.push({v: name, s: 0});
+      row.push({v: dept, s: 0});
+      row.push({v: ip, s: 2});
+      finalQuestions.forEach(function(q, qIdx){
+        var ans="";
+        if (q.id && ansMap[String(q.id)]!==undefined) ans=ansMap[String(q.id)];
+        else if (q.title && ansMap[String(q.title).trim()]!==undefined) ans=ansMap[String(q.title).trim()];
+        else if (ansMap["idx_"+qIdx]!==undefined) ans=ansMap["idx_"+qIdx];
+        row.push({v: ans, s: 0});
       });
-      xml += ' </Row>\n';
+      rows.push(row);
     });
 
-    xml += '</Table>\n</Worksheet>\n</Workbook>';
+    // Build sheet XML
+    var sheetXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+    sheetXml += '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">\n';
+    sheetXml += '<cols>\n';
+    colWidths.forEach(function(w, i){
+      sheetXml += '  <col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>\n';
+    });
+    sheetXml += '</cols>\n';
+    sheetXml += '<sheetData>\n';
+    rows.forEach(function(row, rIdx){
+      var rNum = rIdx+1;
+      if (row.length===0) {
+        sheetXml += '  <row r="'+rNum+'"></row>\n';
+        return;
+      }
+      sheetXml += '  <row r="'+rNum+'">\n';
+      // Handle merged title/meta rows: if colspan, we create one cell and add mergeCells later, but for simplicity just put in A and leave others empty
+      row.forEach(function(cell, cIdx){
+        var colLetter = colToLetter(cIdx);
+        var ref = colLetter + rNum;
+        var style = cell.s !== undefined ? ' s="'+cell.s+'"' : '';
+        if (cell.isNumber && !isNaN(cell.v) && cell.v!=="") {
+          sheetXml += '    <c r="'+ref+'"'+style+'><v>'+escXml(cell.v)+'</v></c>\n';
+        } else {
+          // inline string
+          var v = cell.v == null ? "" : String(cell.v);
+          // escape and handle
+          sheetXml += '    <c r="'+ref+'"'+style+' t="inlineStr"><is><t>'+escXml(v)+'</t></is></c>\n';
+        }
+      });
+      sheetXml += '  </row>\n';
+    });
+    sheetXml += '</sheetData>\n';
+    // Merge title and meta across all columns
+    if (headers.length>1) {
+      sheetXml += '<mergeCells count="2"><mergeCell ref="A1:'+colToLetter(headers.length-1)+'1"/><mergeCell ref="A2:'+colToLetter(headers.length-1)+'2"/></mergeCells>\n';
+    }
+    sheetXml += '</worksheet>';
 
-    var blob = new Blob([xml], { type: "application/vnd.ms-excel;charset=utf-8" });
+    var workbookXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+      '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">\n' +
+      '  <sheets><sheet name="KetQuaKhaoSat" sheetId="1" r:id="rId1"/></sheets>\n' +
+      '</workbook>';
+
+    var workbookRelsXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
+      '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>\n' +
+      '  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>\n' +
+      '</Relationships>';
+
+    var relsXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
+      '  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>\n' +
+      '</Relationships>';
+
+    var contentTypesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n' +
+      '  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\n' +
+      '  <Default Extension="xml" ContentType="application/xml"/>\n' +
+      '  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>\n' +
+      '  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>\n' +
+      '  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>\n' +
+      '</Types>';
+
+    var stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+      '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">\n' +
+      '  <fonts count="2">\n' +
+      '    <font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/><scheme val="minor"/></font>\n' +
+      '    <font><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/><family val="2"/><scheme val="minor"/><b/></font>\n' +
+      '  </fonts>\n' +
+      '  <fills count="2">\n' +
+      '    <fill><patternFill patternType="none"/></fill>\n' +
+      '    <fill><patternFill patternType="solid"><fgColor rgb="FF4F46E5"/><bgColor indexed="64"/></patternFill></fill>\n' +
+      '  </fills>\n' +
+      '  <borders count="1">\n' +
+      '    <border><left style="thin"><color indexed="64"/></left><right style="thin"><color indexed="64"/></right><top style="thin"><color indexed="64"/></top><bottom style="thin"><color indexed="64"/></bottom><diagonal/></border>\n' +
+      '  </borders>\n' +
+      '  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>\n' +
+      '  <cellXfs count="3">\n' +
+      '    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>\n' +
+      '    <xf numFmtId="0" fontId="1" fillId="1" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>\n' +
+      '    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>\n' +
+      '  </cellXfs>\n' +
+      '</styleSheet>';
+
+    // ZIP builder (STORE, no compression)
+    var files = [
+      {name: "[Content_Types].xml", data: contentTypesXml},
+      {name: "_rels/.rels", data: relsXml},
+      {name: "xl/workbook.xml", data: workbookXml},
+      {name: "xl/_rels/workbook.xml.rels", data: workbookRelsXml},
+      {name: "xl/worksheets/sheet1.xml", data: sheetXml},
+      {name: "xl/styles.xml", data: stylesXml}
+    ];
+    var zipData = createZip(files);
+    var blob = new Blob([zipData], {type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
     var url = URL.createObjectURL(blob);
     var a = document.createElement("a");
     a.href = url;
-    a.download = (filename || "Khao_Sat_Leggett") + "_" + new Date().toISOString().slice(0,10) + ".xls";
+    a.download = (filename || "Khao_Sat_Leggett") + "_" + new Date().toISOString().slice(0,10) + ".xlsx";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+
+    function createZip(files) {
+      var crcTable = (function(){
+        var t=[]; for(var n=0;n<256;n++){ var c=n; for(var k=0;k<8;k++) c=c&1?0xEDB88320^(c>>>1):c>>>1; t[n]=c; } return t;
+      })();
+      function crc32(buf){
+        var crc=-1; for(var i=0;i<buf.length;i++) crc=(crc>>>8)^crcTable[(crc^buf[i])&0xFF]; return (crc^-1)>>>0;
+      }
+      function strToBytes(s){
+        return new TextEncoder().encode(s);
+      }
+      var fileDatas = files.map(function(f){
+        var bytes = strToBytes(f.data);
+        return {name: f.name, bytes: bytes, crc: crc32(bytes)};
+      });
+      var localParts = [];
+      var centralParts = [];
+      var offset = 0;
+      fileDatas.forEach(function(f){
+        var nameBytes = strToBytes(f.name);
+        // Local header
+        var localHeader = new Uint8Array(30 + nameBytes.length);
+        var dv = new DataView(localHeader.buffer);
+        dv.setUint32(0, 0x04034b50, true);
+        dv.setUint16(4, 20, true);
+        dv.setUint16(6, 0, true);
+        dv.setUint16(8, 0, true);
+        dv.setUint16(10, 0, true);
+        dv.setUint16(12, 0, true);
+        dv.setUint32(14, f.crc, true);
+        dv.setUint32(18, f.bytes.length, true);
+        dv.setUint32(22, f.bytes.length, true);
+        dv.setUint16(26, nameBytes.length, true);
+        dv.setUint16(28, 0, true);
+        localHeader.set(nameBytes, 30);
+        localParts.push(localHeader);
+        localParts.push(f.bytes);
+        // Central header
+        var centralHeader = new Uint8Array(46 + nameBytes.length);
+        var cdv = new DataView(centralHeader.buffer);
+        cdv.setUint32(0, 0x02014b50, true);
+        cdv.setUint16(4, 20, true);
+        cdv.setUint16(6, 20, true);
+        cdv.setUint16(8, 0, true);
+        cdv.setUint16(10, 0, true);
+        cdv.setUint16(12, 0, true);
+        cdv.setUint16(14, 0, true);
+        cdv.setUint32(16, f.crc, true);
+        cdv.setUint32(20, f.bytes.length, true);
+        cdv.setUint32(24, f.bytes.length, true);
+        cdv.setUint16(28, nameBytes.length, true);
+        cdv.setUint16(30, 0, true);
+        cdv.setUint16(32, 0, true);
+        cdv.setUint16(34, 0, true);
+        cdv.setUint16(36, 0, true);
+        cdv.setUint32(38, 0, true);
+        cdv.setUint32(42, offset, true);
+        centralHeader.set(nameBytes, 46);
+        centralParts.push(centralHeader);
+        offset += localHeader.length + f.bytes.length;
+      });
+      var centralSize = centralParts.reduce(function(s,a){return s+a.length;},0);
+      var centralOffset = offset;
+      var eocd = new Uint8Array(22);
+      var edv = new DataView(eocd.buffer);
+      edv.setUint32(0, 0x06054b50, true);
+      edv.setUint16(4, 0, true);
+      edv.setUint16(6, 0, true);
+      edv.setUint16(8, fileDatas.length, true);
+      edv.setUint16(10, fileDatas.length, true);
+      edv.setUint32(12, centralSize, true);
+      edv.setUint32(16, centralOffset, true);
+      edv.setUint16(20, 0, true);
+      var totalSize = offset + centralSize + eocd.length;
+      var out = new Uint8Array(totalSize);
+      var pos=0;
+      localParts.forEach(function(p){ out.set(p, pos); pos+=p.length; });
+      centralParts.forEach(function(p){ out.set(p, pos); pos+=p.length; });
+      out.set(eocd, pos);
+      return out;
+    }
   }
 };
-
 function escXml(str) {
   if (str === null || str === undefined) return "";
   return String(str)
@@ -2751,9 +2849,7 @@ async function proceedToQuestions() {
   // Bắt buộc MSNV phải bắt đầu bằng LEP, sau LEP là chữ/số (tuỳ tình huống)
   if (!isValidMsnv(msnv)) {
     if (!/^LEP/i.test(msnv)) {
-      // Gợi ý nếu chỉ nhập số/thiếu LEP
-      var suggestion = /^LEP/i.test(msnvRaw) ? "" : " (gợi ý: LEP" + msnvRaw + ")";
-      showToast("MSNV phải bắt đầu bằng \"LEP\" (ví dụ: LEP123, LEP120A). Vui lòng nhập đúng" + suggestion + ".", "error");
+      showToast("MSNV phải bắt đầu bằng \"LEP\"", "error");
     } else {
       showToast("Sau \"LEP\" chỉ được chứa chữ và số, không dấu/cách (ví dụ: LEP123, LEP120A).", "error");
     }
