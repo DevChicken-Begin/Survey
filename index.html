@@ -2045,24 +2045,27 @@ const ExcelExporter = {
 
     var stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
       '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">\n' +
-      '  <fonts count="3">\n' +
+      '  <fonts count="4">\n' +
       '    <font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/><scheme val="minor"/></font>\n' +
       '    <font><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/><family val="2"/><scheme val="minor"/><b/></font>\n' +
       '    <font><sz val="16"/><color rgb="FF1E1B4B"/><name val="Calibri"/><family val="2"/><scheme val="minor"/><b/></font>\n' +
+      '    <font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/><scheme val="minor"/><b/></font>\n' +
       '  </fonts>\n' +
-      '  <fills count="2">\n' +
+      '  <fills count="3">\n' +
       '    <fill><patternFill patternType="none"/></fill>\n' +
-      '    <fill><patternFill patternType="solid"><fgColor rgb="FF4F46E5"/><bgColor rgb="FF4F46E5"/></patternFill></fill>\n' +
+      '    <fill><patternFill patternType="solid"><fgColor rgb="FF4472C4"/><bgColor indexed="64"/></patternFill></fill>\n' +
+      '    <fill><patternFill patternType="solid"><fgColor rgb="FFD9E1F2"/><bgColor indexed="64"/></patternFill></fill>\n' +
       '  </fills>\n' +
       '  <borders count="1">\n' +
-      '    <border><left style="thin"><color auto="1"/></left><right style="thin"><color auto="1"/></right><top style="thin"><color auto="1"/></top><bottom style="thin"><color auto="1"/></bottom><diagonal/></border>\n' +
+      '    <border><left style="thin"><color indexed="64"/></left><right style="thin"><color indexed="64"/></right><top style="thin"><color indexed="64"/></top><bottom style="thin"><color indexed="64"/></bottom><diagonal/></border>\n' +
       '  </borders>\n' +
       '  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>\n' +
-      '  <cellXfs count="4">\n' +
+      '  <cellXfs count="5">\n' +
       '    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>\n' +
-      '    <xf numFmtId="0" fontId="1" fillId="1" borderId="0" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>\n' +
+      '    <xf numFmtId="0" fontId="3" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>\n' +
       '    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>\n' +
       '    <xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>\n' +
+      '    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>\n' +
       '  </cellXfs>\n' +
       '</styleSheet>';
 
