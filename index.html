@@ -1928,13 +1928,13 @@ const ExcelExporter = {
 
     // Build rows for sheetData (array of arrays of cell objects)
     var rows = [];
-    // Row 1: Title
-    rows.push([{v: "BÁO CÁO KẾT QUẢ KHẢO SÁT: " + surveyTitle, s: 1, colspan: headers.length}]);
-    // Row 2: Meta
+    // Row 1: Title – dùng style 3 (to, đậm, màu đậm, căn giữa)
+    rows.push([{v: "BÁO CÁO KẾT QUẢ KHẢO SÁT: " + surveyTitle, s: 3, colspan: headers.length}]);
+    // Row 2: Meta – style 0 thường
     rows.push([{v: "Ngày xuất: " + new Date().toLocaleString("vi-VN") + " | Tổng số: " + responses.length, s: 0, colspan: headers.length}]);
     // Row 3: empty
     rows.push([]);
-    // Row 4: Header
+    // Row 4: Header – style 1 (trắng trên nền tím, căn giữa, đậm)
     rows.push(headers.map(function(h){ return {v: h, s: 1}; }));
     // Data rows
     responses.forEach(function(r, rIdx){
@@ -1986,11 +1986,15 @@ const ExcelExporter = {
     sheetXml += '<sheetData>\n';
     rows.forEach(function(row, rIdx){
       var rNum = rIdx+1;
+      var ht = "";
+      if (rNum === 1) ht = ' ht="30" customHeight="1"';
+      else if (rNum === 4) ht = ' ht="26" customHeight="1"';
+      else if (rNum > 4) ht = ' ht="18" customHeight="1"';
       if (row.length===0) {
-        sheetXml += '  <row r="'+rNum+'"></row>\n';
+        sheetXml += '  <row r="'+rNum+'"'+ht+'></row>\n';
         return;
       }
-      sheetXml += '  <row r="'+rNum+'">\n';
+      sheetXml += '  <row r="'+rNum+'"'+ht+'>\n';
       // Handle merged title/meta rows: if colspan, we create one cell and add mergeCells later, but for simplicity just put in A and leave others empty
       row.forEach(function(cell, cIdx){
         var colLetter = colToLetter(cIdx);
@@ -2041,22 +2045,24 @@ const ExcelExporter = {
 
     var stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
       '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">\n' +
-      '  <fonts count="2">\n' +
+      '  <fonts count="3">\n' +
       '    <font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/><scheme val="minor"/></font>\n' +
       '    <font><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/><family val="2"/><scheme val="minor"/><b/></font>\n' +
+      '    <font><sz val="16"/><color rgb="FF1E1B4B"/><name val="Calibri"/><family val="2"/><scheme val="minor"/><b/></font>\n' +
       '  </fonts>\n' +
       '  <fills count="2">\n' +
       '    <fill><patternFill patternType="none"/></fill>\n' +
-      '    <fill><patternFill patternType="solid"><fgColor rgb="FF4F46E5"/><bgColor indexed="64"/></patternFill></fill>\n' +
+      '    <fill><patternFill patternType="solid"><fgColor rgb="FF4F46E5"/><bgColor rgb="FF4F46E5"/></patternFill></fill>\n' +
       '  </fills>\n' +
       '  <borders count="1">\n' +
-      '    <border><left style="thin"><color indexed="64"/></left><right style="thin"><color indexed="64"/></right><top style="thin"><color indexed="64"/></top><bottom style="thin"><color indexed="64"/></bottom><diagonal/></border>\n' +
+      '    <border><left style="thin"><color auto="1"/></left><right style="thin"><color auto="1"/></right><top style="thin"><color auto="1"/></top><bottom style="thin"><color auto="1"/></bottom><diagonal/></border>\n' +
       '  </borders>\n' +
       '  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>\n' +
-      '  <cellXfs count="3">\n' +
-      '    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>\n' +
-      '    <xf numFmtId="0" fontId="1" fillId="1" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>\n' +
-      '    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>\n' +
+      '  <cellXfs count="4">\n' +
+      '    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>\n' +
+      '    <xf numFmtId="0" fontId="1" fillId="1" borderId="0" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>\n' +
+      '    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>\n' +
+      '    <xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>\n' +
       '  </cellXfs>\n' +
       '</styleSheet>';
 
